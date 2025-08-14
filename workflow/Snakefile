@@ -1,0 +1,16 @@
+# Define common functions and variables
+include: 'rules/common.smk'
+include: 'rules/GetData.smk'
+include: 'rules/QC_RNA.smk'
+
+# Define results working directory
+workdir: config['User']['output_dir']
+
+rule MultiomePipe_output:
+    input:
+        # QC RNA
+        expand("QC/RNA/{sample}_filtered.hd5mu", sample=SAMPLES.keys()) if QC_RNA else [],
+        # QC ATAC
+        expand("QC/ATAC/{sample}.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
+    default_target: True
+    localrule: True

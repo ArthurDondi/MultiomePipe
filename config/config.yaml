@@ -1,0 +1,29 @@
+# MultiomePipe config yaml file
+
+# Change those values to yours
+User:
+  input_dir: /home/dondia/run_MultiomePipe/input_data
+  output_dir: /home/dondia/run_MultiomePipe/output
+  sample_map: /path/to/sample_map.tsv
+  cancer_cell_type: HGSOC
+  
+# Change any of those to True if you want to run it, else False
+Run:
+  # QC the GEX data
+  QC_RNA: True
+  # QC the ATAC data
+  QC_ATAC: False
+
+samples:
+  10X_granulocyte: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_10k/pbmc_granulocyte_sorted_10k
+
+
+### QC RNA
+QC_RNA:
+  raw_data: True
+  min_genes: 100
+  min_cells: 3
+
+### QC ATAC
+QC_ATAC:
+  idk: 1
