@@ -9,7 +9,8 @@ workdir: config['User']['output_dir']
 rule MultiomePipe_output:
     input:
         # QC RNA
-        expand("QC/RNA/{sample}_filtered.hd5mu", sample=SAMPLES.keys()) if QC_RNA else [],
+        expand("QC/RNA/{sample}/{sample}_filtered.hd5mu", sample=SAMPLES.keys()) if QC_RNA else [],
+        expand("QC/RNA/{sample}/{sample}_processed.rds", sample=SAMPLES.keys()) if QC_RNA else [],
         # QC ATAC
         expand("QC/ATAC/{sample}.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
     default_target: True
