@@ -13,24 +13,21 @@ import muon as mu
 # Functions
 # -----------------------------
 def load_data(input_file):
-    mdata = mu.read_10x_h5(input_file)
-    mdata.var_names_make_unique()
-    if "rna" not in mdata.mod:
-        raise ValueError(f"No 'rna' modality found in {input_file}. Available: {list(mdata.mod.keys())}")
-    rna = mdata.mod['rna']
-    return rna, mdata
+    adata = ad.io.read_h5ad(input_file)
+    adata.var_names_make_unique()
+    return adata 
 
-def run_calculate_qc_metrics(rna, sample, outdir):
-    rna.var["mt"] = rna.var_names.str.startswith("MT-")
-    rna.var["ribo"] = rna.var_names.str.startswith(("RPS", "RPL"))
-    rna.var["hb"] = rna.var_names.str.contains("^HB[^(P)]")
+def run_calculate_qc_metrics(adata, sample):
+    adata.var["mt"] = adata.var_names.str.startswith("MT-")
+    adata.var["ribo"] = adata.var_names.str.startswith(("RPS", "RPL"))
+    adata.var["hb"] = adata.var_names.str.contains("^HB[^(P)]")
 
-    sc.pp.calculate_qc_metrics(rna, qc_vars=["mt","ribo","hb"], inplace=True, log1p=True)
-    rna.var_names_make_unique()
+    sc.pp.calculate_qc_metrics(adata, qc_vars=["mt","ribo","hb"], inplace=True, log1p=True)
+    adata.var_names_make_unique()
 
     # Plotting
     sc.pl.violin(
-        rna,
+        adata,
         ["n_genes_by_counts", "total_counts", "pct_counts_mt"],
         jitter=0.4,
         multi_panel=True,
@@ -38,7 +35,7 @@ def run_calculate_qc_metrics(rna, sample, outdir):
         save=f"{sample}_raw_violin.png"
     )
     sc.pl.scatter(
-        rna,
+        adata,
         "total_counts",
         "n_genes_by_counts",
         color="pct_counts_mt",
@@ -46,15 +43,15 @@ def run_calculate_qc_metrics(rna, sample, outdir):
         show=False,
         save=f"{sample}_raw_scatter.png"
     )
-    return rna
+    return adata
 
-def run_raw_filtering(rna, min_genes, min_cells, sample, outdir):
-    sc.pp.filter_cells(rna, min_genes=min_genes)
-    sc.pp.filter_genes(rna, min_cells=min_cells)
+def run_raw_filtering(adata, min_genes, min_cells, sample):
+    sc.pp.filter_cells(adata, min_genes=min_genes)
+    sc.pp.filter_genes(adata, min_cells=min_cells)
 
     # Plotting# Plotting
     sc.pl.violin(
-        rna,
+        adata,
         ["n_genes_by_counts", "total_counts", "pct_counts_mt"],
         jitter=0.4,
         multi_panel=True,
@@ -62,7 +59,7 @@ def run_raw_filtering(rna, min_genes, min_cells, sample, outdir):
         save=f"{sample}_{min_genes}minGenes_{min_cells}minCells_violin.png"
     )
     sc.pl.scatter(
-        rna,
+        adata,
         "total_counts",
         "n_genes_by_counts",
         color="pct_counts_mt",
@@ -70,64 +67,44 @@ def run_raw_filtering(rna, min_genes, min_cells, sample, outdir):
         show=False,
         save=f"{sample}_{min_genes}minGenes_{min_cells}minCells_scatter.png"
     )
-    return rna
+    return adata
 
-def run_normalization_and_clustering(rna, sample, outdir):
-    sc.pp.normalize_total(rna, target_sum=1e4)
-    sc.pp.log1p(rna)
-    sc.pp.highly_variable_genes(rna, n_top_genes=2000, subset=True)
-    sc.pp.pca(rna, n_comps=30)
-    sc.pp.neighbors(rna, n_neighbors=15, n_pcs=30)
-    sc.tl.umap(rna)
-    sc.tl.leiden(rna, key_added="clusters") # cluster labels in rna.obs['leiden']
+def identify_doublets(adata):
+    sc.pp.scrublet(adata)
+    n_predicted_doublets = adata.obs['predicted_doublet'].sum()
+    total_cells = adata.n_obs
+    print(f"Predicted doublets: {n_predicted_doublets} over {total_cells} cells ({100 * n_predicted_doublets / total_cells:.1f}%)")
+    return adata
 
-    # Save clusters for SoupX
-    cluster_file = os.path.join(outdir, f"{sample}_scanpy_clusters.tsv")
-    rna.obs['clusters'].to_csv(cluster_file, sep='\t', header=False)
-    print(f"Scanpy clusters saved to {cluster_file}")
 
-    # Save cluster plots
-    sc.pl.umap(rna, 
-               color="clusters", 
-               show=False,
-               save=f"_{sample}_clusters.png")
+def run_normalization_and_clustering(adata, sample):
+    # Saving count data
+    adata.layers["counts"] = adata.X.copy()
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata)
+    sc.pp.highly_variable_genes(adata, n_top_genes=2000)
+    # Plot highly variable genes:
+    sc.pl.highly_variable_genes(adata,
+                                show=False,
+                                save=f"{sample}_HVG.png")
 
-    return rna
+    sc.tl.pca(adata)
+    sc.pp.neighbors(adata, n_neighbors=15, n_pcs=30)
+    # Plot PCs variance ratio :
+    sc.pl.pca_variance_ratio(adata, 
+                             n_pcs=50, 
+                             log=True,
+                             show=False,
+                             save=f"{sample}_PCs_variance.png")
+    sc.tl.umap(adata)
+    res = 0.2
+    sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res) # cluster labels in adata.obs['leiden']
+    sc.pl.umap(adata,
+            color=f"leiden_res_{res:4.2f}",
+            show=False,
+            save=f"{sample}_UMAP_leiden_{res}.png")
 
-def write_10x_mtx(dirname, adata, var_names="gene_symbols", overwrite=False):
-    if os.path.exists(dirname):
-        if overwrite:
-            import shutil
-            shutil.rmtree(dirname)
-        else:
-            raise FileExistsError(f"{dirname} exists. Set overwrite=True to overwrite.")
-    os.makedirs(dirname, exist_ok=True)
-
-    io.mmwrite(os.path.join(dirname, "matrix.mtx"), adata.X.T)
-    adata.obs.index.to_series().to_csv(
-        os.path.join(dirname, "barcodes.tsv"), index=False, header=False
-    )
-    features = adata.var["gene_symbols"] if var_names=="gene_symbols" else adata.var[var_names]
-    pd.Series(features).to_csv(
-        os.path.join(dirname, "features.tsv"), index=False, header=False
-    )
-
-    for fname in ["matrix.mtx", "barcodes.tsv", "features.tsv"]:
-        with open(os.path.join(dirname, fname), "rb") as f_in, gzip.open(os.path.join(dirname, fname+".gz"), "wb") as f_out:
-            f_out.writelines(f_in)
-        os.remove(os.path.join(dirname, fname))
-    print(f"10X-style files written to {dirname}")
-
-def write_data(rna, mdata, output, outdir, sample):
-    # Muon H5
-    mdata.write(output)
-    # 10X export
-    write_10x_mtx(
-        os.path.join(outdir, "10x_for_SoupX"),
-        rna,
-        var_names="gene_ids",
-        overwrite=True
-    )
+    return adata
 
 def initialize_parser():
     parser = argparse.ArgumentParser(description='QC + clustering for 10X Multiome RNA')
@@ -153,41 +130,47 @@ def main():
     min_genes = args.min_genes
     min_cells = args.min_cells
 
-    os.makedirs(outdir, exist_ok=True)
     sc.settings.figdir = outdir  + "/Plots"
 
     # 1. Load data
     print("1. Load data")
     start = timeit.default_timer()
-    rna, mdata = load_data(input_file)
+    adata = load_data(input_file)
     stop = timeit.default_timer()
     print(f"Loaded data in {round(stop-start,2)}s")
 
     # 2. QC metrics
     print("2. QC metrics")
     start = timeit.default_timer()
-    rna = run_calculate_qc_metrics(rna, sample, outdir)
+    adata = run_calculate_qc_metrics(adata, sample)
     stop = timeit.default_timer()
     print(f"QC metrics computed in {round(stop-start,2)}s")
 
-    # 3. Filtering
+    # 3. RaW Filtering
     print("3. Filtering")
     start = timeit.default_timer()
-    rna = run_raw_filtering(rna, min_genes, min_cells, sample, outdir)
+    adata = run_raw_filtering(adata, min_genes, min_cells, sample)
     stop = timeit.default_timer()
     print(f"Filtering done in {round(stop-start,2)}s")
 
+    # 4. Detecting Doublets
+    print("4. Detecting Doublets")
+    start = timeit.default_timer()
+    adata = identify_doublets(adata)
+    stop = timeit.default_timer()
+    print(f"Detecting doublets done in {round(stop-start,2)}s")
+    
     # 4. Normalization + clustering
     print("4. Normalization + clustering")
     start = timeit.default_timer()
-    rna = run_normalization_and_clustering(rna, sample, outdir)
+    adata = run_normalization_and_clustering(adata, sample)
     stop = timeit.default_timer()
     print(f"Normalization + clustering done in {round(stop-start,2)}s")
 
     # 5. Write data
     print("5. Write data")
     start = timeit.default_timer()
-    write_data(rna, mdata, output_file, outdir, sample)
+    adata.write(output_file)
     stop = timeit.default_timer()
     print(f"Data written in {round(stop-start,2)}s")
 

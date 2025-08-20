@@ -1,0 +1,5 @@
+name: cellbender
+channels:
+  - defaults
+  - conda-forge
+prefix: /home/dondia/anaconda3/envs/cellbender

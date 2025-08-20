@@ -15,15 +15,41 @@ Run:
   QC_ATAC: False
 
 samples:
-  10X_granulocyte: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_10k/pbmc_granulocyte_sorted_10k
+  #10X_granulocyte: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_10k/pbmc_granulocyte_sorted_10k
+  human_brain_3k: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/human_brain_3k/human_brain_3k
 
 
-### QC RNA
 QC_RNA:
+  CellbenderRemoveBackgroundRNA:
+    n_splits: 10
+    cuda: '' # change to '--cuda' if CUDA is installed and working
+    expected-cells:
+       human_brain_3k: 300
+       10X_granulocyte: 1000
+    epochs: 50
+    checkpoint_mins: 1
+    projected_ambient_count_threshold: 0.05
+    empty_drop_training_fraction: 0.05
   raw_data: True
   min_genes: 100
   min_cells: 3
 
 ### QC ATAC
 QC_ATAC:
-  idk: 1
+  ExportPseudobulk:
+    variable: "VSN_cell_type"
+    sample_id_col: "VSN_sample_id"
+    n_cpu: 4
+    normalize_bigwig: ""         # use "" if False, "--normalize_bigwig" if True
+    split_pattern: "-"
+    chromsizes: null 
+# MACS2 peak calling parameters
+  MACS2CallPeaks:
+    format: "BEDPE"
+    gsize: "hs"
+    qvalue: 0.05
+    shift: 73
+    extsize: 146
+    keep_dup: "all"
+    call_summits: "--call-summits"
+    nolambda: "--nolambda"
