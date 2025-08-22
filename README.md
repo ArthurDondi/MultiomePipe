@@ -1,1 +1,1 @@
-Test pipeline to play around with single-cell tools for 10X Multiome analysis
+MultiomePipe is a Snakemake pipeline to pre-process 10X Multiome data after running Cellranger ARC.
