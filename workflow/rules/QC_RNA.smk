@@ -5,7 +5,7 @@
 
 rule ElbowPlot:
     input:
-        f"{INPUT}/raw/{{sample}}.raw_feature_bc_matrix.h5",
+        f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
     output:
         expand("QC/RNA/{{sample}}/Subsampling/split_{i}.raw_feature_bc_matrix.h5", i=Is),
         png = "QC/RNA/{sample}/Plots/{sample}_ElbowPlot.png",
@@ -90,6 +90,7 @@ rule MergingCellbenderOutput:
 rule RawFilteringRNA:
     input:
         h5 = "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
+        markers = f"{INPUT}/{{sample}}/marker_genes.json"
     output:
         hd5mu = "QC/RNA/{sample}/Filtering/{sample}_filtered.hd5ad",
     params:
@@ -108,6 +109,7 @@ rule RawFilteringRNA:
         python -W ignore {params.script} \
         --input {input.h5} \
         --output {output.hd5mu} \
+        --markers {input.markers} \
         --sample {wildcards.sample} \
         --outdir {params.dir} \
         --min_genes {params.min_genes} \

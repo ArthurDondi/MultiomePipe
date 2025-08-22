@@ -1,13 +1,9 @@
 import os
 import argparse
 import timeit
-import gzip
-import numpy as np
-import pandas as pd
-from scipy import io
 import anndata as ad
 import scanpy as sc
-import muon as mu
+import json
 
 # -----------------------------
 # Functions
@@ -32,7 +28,7 @@ def run_calculate_qc_metrics(adata, sample):
         jitter=0.4,
         multi_panel=True,
         show=False,
-        save=f"{sample}_raw_violin.png"
+        save=f"_{sample}.png"
     )
     sc.pl.scatter(
         adata,
@@ -41,7 +37,7 @@ def run_calculate_qc_metrics(adata, sample):
         color="pct_counts_mt",
         size=50,
         show=False,
-        save=f"{sample}_raw_scatter.png"
+        save=f"_{sample}.png"
     )
     return adata
 
@@ -56,7 +52,7 @@ def run_raw_filtering(adata, min_genes, min_cells, sample):
         jitter=0.4,
         multi_panel=True,
         show=False,
-        save=f"{sample}_{min_genes}minGenes_{min_cells}minCells_violin.png"
+        save=f"_{min_genes}minGenes_{min_cells}minCells_{sample}.png"
     )
     sc.pl.scatter(
         adata,
@@ -65,7 +61,7 @@ def run_raw_filtering(adata, min_genes, min_cells, sample):
         color="pct_counts_mt",
         size=50,
         show=False,
-        save=f"{sample}_{min_genes}minGenes_{min_cells}minCells_scatter.png"
+        save=f"_{min_genes}minGenes_{min_cells}minCells_{sample}.png"
     )
     return adata
 
@@ -86,7 +82,7 @@ def run_normalization_and_clustering(adata, sample):
     # Plot highly variable genes:
     sc.pl.highly_variable_genes(adata,
                                 show=False,
-                                save=f"{sample}_HVG.png")
+                                save=f"_HVG_{sample}.png")
 
     sc.tl.pca(adata)
     sc.pp.neighbors(adata, n_neighbors=15, n_pcs=30)
@@ -95,21 +91,52 @@ def run_normalization_and_clustering(adata, sample):
                              n_pcs=50, 
                              log=True,
                              show=False,
-                             save=f"{sample}_PCs_variance.png")
+                             save=f"_{sample}.png")
     sc.tl.umap(adata)
-    res = 0.2
-    sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res) # cluster labels in adata.obs['leiden']
+    for res in [0.2, 0.5, 1]:
+        sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res) # cluster labels in adata.obs['leiden']
     sc.pl.umap(adata,
-            color=f"leiden_res_{res:4.2f}",
+            color=[f"leiden_res_{res:4.2f}" for res in [0.2, 0.5, 1]],
             show=False,
-            save=f"{sample}_UMAP_leiden_{res}.png")
+            save=f"_leiden_res_{sample}.png")
+    sc.pl.umap(adata,
+                color=["total_counts", "pct_counts_mt", "doublet_score", "background_fraction"],
+                show=False,
+                save=f"_QC_{sample}.png")
 
+    return adata
+
+def run_annotation(adata,markers_file,sample):
+
+    with open(markers_file, "r") as f:
+        marker_genes = json.load(f)
+
+    # Keeping only genes in dataset
+    marker_genes_in_data = {}
+    for ct, markers in marker_genes.items():
+        markers_found = []
+        for marker in markers:
+            if marker in adata.var.index:
+                markers_found.append(marker)
+        marker_genes_in_data[ct] = markers_found
+
+    res = 0.5
+    sc.pl.dotplot(
+        adata,
+        groupby=f"leiden_res_{res:4.2f}",
+        var_names=marker_genes_in_data,
+        standard_scale="var",  # standard scale: normalize each gene to range from 0 to 1
+        show=False,
+        save=f"_leiden_res_{res:4.2f}_{sample}.png"
+    )
+    
     return adata
 
 def initialize_parser():
     parser = argparse.ArgumentParser(description='QC + clustering for 10X Multiome RNA')
-    parser.add_argument('--input', type=str, required=True)
-    parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--input', type=str, required=True, help="h5ad")
+    parser.add_argument('--output', type=str, required=True, help="h5ad")
+    parser.add_argument('--markers', type=str, required=True, help="json")
     parser.add_argument('--sample', type=str, required=True)
     parser.add_argument('--outdir', type=str, required=True)
     parser.add_argument('--min_genes', type=int, default=100)
@@ -125,6 +152,7 @@ def main():
 
     input_file = args.input
     output_file = args.output
+    markers = args.markers
     sample = args.sample
     outdir = args.outdir
     min_genes = args.min_genes
@@ -167,7 +195,14 @@ def main():
     stop = timeit.default_timer()
     print(f"Normalization + clustering done in {round(stop-start,2)}s")
 
-    # 5. Write data
+    # 5. Annotation
+    print("4. Annotation")
+    start = timeit.default_timer()
+    adata = run_annotation(adata,markers,sample)
+    stop = timeit.default_timer()
+    print(f"Annotation done in {round(stop-start,2)}s")
+
+    # 6. Write data
     print("5. Write data")
     start = timeit.default_timer()
     adata.write(output_file)
