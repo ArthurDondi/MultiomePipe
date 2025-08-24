@@ -11,7 +11,7 @@ workdir: config['User']['output_dir']\
 rule MultiomePipe_output:
     input:
         # QC RNA
-        expand("QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad", sample=SAMPLES.keys()) if QC_RNA else [],
+        "QC/RNA/Merged/merged.batch_corrected.h5ad" if QC_RNA else [],
         #expand("QC/RNA/{sample}/{sample}_processed.rds", sample=SAMPLES.keys()) if QC_RNA else [],
         # QC ATAC
         expand("QC/ATAC/{sample}.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],

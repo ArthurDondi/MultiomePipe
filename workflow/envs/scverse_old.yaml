@@ -26,7 +26,6 @@ dependencies:
   - glpk=5.0=h445213a_0
   - gmp=6.3.0=h6a678d5_0
   - h5py=3.14.0=nompi_py313hfaf8fd4_100
-  - harmonypy=0.0.10=pyhdfd78af_0
   - hdf5=1.14.6=nompi_h6e4c0c1_103
   - joblib=1.5.1=py313h06a4308_0
   - kiwisolver=1.4.8=py313h6a678d5_0

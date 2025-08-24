@@ -10,15 +10,22 @@ import json
 # -----------------------------
 def load_data(input_file):
     adata = ad.io.read_h5ad(input_file)
+    if "counts" in adata.layers: 
+        adata.X = adata.layers['counts']
+    else:
+        adata.layers["counts"] = adata.X.copy()
     adata.var_names_make_unique()
-    return adata 
+    return adata
 
 def run_calculate_qc_metrics(adata, sample):
     adata.var["mt"] = adata.var_names.str.startswith("MT-")
     adata.var["ribo"] = adata.var_names.str.startswith(("RPS", "RPL"))
     adata.var["hb"] = adata.var_names.str.contains("^HB[^(P)]")
 
-    sc.pp.calculate_qc_metrics(adata, qc_vars=["mt","ribo","hb"], inplace=True, log1p=True)
+    sc.pp.calculate_qc_metrics(adata,
+                               qc_vars=["mt","ribo","hb"],
+                               inplace=True, 
+                               log1p=True)
     adata.var_names_make_unique()
 
     # Plotting
@@ -80,8 +87,6 @@ def identify_doublets(adata, doublet_threshold):
 
 
 def run_normalization_and_clustering(adata, sample, is_filtered):
-    # Saving count data
-    adata.layers["counts"] = adata.X.copy()
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
     sc.pp.highly_variable_genes(adata, n_top_genes=2000)
@@ -204,23 +209,25 @@ def main():
     stop = timeit.default_timer()
     print(f"Detecting doublets done in {round(stop-start,2)}s")
     
-    # 4. Normalization + clustering
-    print("4. Normalization + clustering")
+    # 5. Normalization + clustering
+    print("5. Normalization + clustering")
     start = timeit.default_timer()
     adata = run_normalization_and_clustering(adata, sample, is_filtered)
     stop = timeit.default_timer()
     print(f"Normalization + clustering done in {round(stop-start,2)}s")
 
-    # 5. Annotation (run only if a file path is provided)
+    # 6. Annotation (run only if a file path is provided)
+    print("6. Annotation")
     if markers != '':
-        print("4. Annotation")
         start = timeit.default_timer()
         adata = prepare_annotation(adata,markers,sample)
         stop = timeit.default_timer()
         print(f"Annotation done in {round(stop-start,2)}s")
+    else:
+        print("No marker genes file provided")
 
-    # 6. Write data
-    print("5. Write data")
+    # 7. Write data
+    print("7. Write data")
     start = timeit.default_timer()
     adata.write(output_file)
     stop = timeit.default_timer()

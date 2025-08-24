@@ -5,25 +5,25 @@ import anndata as ad
 import scanpy as sc
 import json
 
-def plot_and_add_annotations(adata, annotation_file, output_file, sample, celltypes, doublets, leiden_res, mode):
+def plot_and_add_annotations(adata, annotation_file, output_file, sample, celltype_key, doublets, leiden_res, mode):
     
     if mode == 'manual':
         with open(annotation_file, "r") as f:
             annotations = json.load(f)
 
-        adata.obs[celltypes] = adata.obs[leiden_res].map(annotations)
+        adata.obs[celltype_key] = adata.obs[leiden_res].map(annotations)
 
     sc.pl.umap(adata,
-            color=celltypes,
+            color=celltype_key,
             legend_loc="on data",
             legend_fontsize=8,
             show=False,
             save=f"_annotated_{sample}.png")
     
-    adata = adata[~adata.obs[celltypes].isin(doublets)].copy()
+    adata = adata[~adata.obs[celltype_key].isin(doublets)].copy()
 
     sc.pl.umap(adata,
-            color=celltypes,
+            color=celltype_key,
             legend_loc="on data",
             legend_fontsize=8,
             show=False,
@@ -40,7 +40,7 @@ def initialize_parser():
     parser.add_argument('--plotdir', type=str, required=True)
     parser.add_argument('--doublets', type=str, nargs='+', required=True, help="List of names of clusters to remove")
     parser.add_argument('--mode', type=str, required=True, choices=['auto', 'manual'], help="Automatic or manual annotation")
-    parser.add_argument('--celltypes', type=str, default ="cell_type", help="Name of celltype .obs column, default: 'cell_type'")
+    parser.add_argument('--celltype_key', type=str, default ="cell_type", help="Name of celltype .obs column, default: 'cell_type'")
     parser.add_argument('--leiden_res', type=str, default="leiden_res_1.00", help="leiden resolution used for manual annotation")
     return parser
 
@@ -58,7 +58,7 @@ def main():
     plotdir = args.plotdir
     doublets = args.doublets
     mode = args.mode
-    celltypes = args.celltypes
+    celltype_key = args.celltype_key
     leiden_res = args.leiden_res
     
 
@@ -66,7 +66,7 @@ def main():
 
     adata = ad.io.read_h5ad(input_file)
 
-    plot_and_add_annotations(adata, annotation_file, output_file, sample, celltypes, doublets, leiden_res, mode)
+    plot_and_add_annotations(adata, annotation_file, output_file, sample, celltype_key, doublets, leiden_res, mode)
 
     
 if __name__ == "__main__":

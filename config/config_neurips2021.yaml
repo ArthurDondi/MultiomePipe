@@ -50,8 +50,12 @@ QC_RNA:
     doublet_threshold: .15
 
   PlottingAnnotations:
-    doublets: "Doublets" # Name all the clusters you want to remove like this
-    celltypes: "cell_type"
+    doublets: "Doublets Undefined" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
+    celltype_key: "cell_type"
+
+  ConcatanateAnnDataObjects:
+    sample_key: "DonorNumber"
+    batch_key: "batch"
 
 ### QC ATAC
 QC_ATAC:

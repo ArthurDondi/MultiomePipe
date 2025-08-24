@@ -92,12 +92,11 @@ rule MergingCellbenderOutput:
 rule RawFilteringRNA:
     input:
         h5ad = lambda wildcards: f"{INPUT}/{{sample}}.h5ad" if IS_FILTERED else "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
-        markers =  '' if IS_ANNOTATED else f"{INPUT}/marker_genes.json"
+        markers =  f"{INPUT}/marker_genes.json"
     output:
         h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
     params:
         script = f"{workflow.basedir}/scripts/QC/RawFilteringRNA.py",
-        dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Filtering/",
         plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         min_genes = config['QC_RNA']['RawFilteringRNA']['min_genes'],
         min_cells = config['QC_RNA']['RawFilteringRNA']['min_cells'],
@@ -165,7 +164,7 @@ rule PlottingAnnotationsManual:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
         plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
-        ctypes = config['QC_RNA']['PlottingAnnotations']['celltypes'],
+        ctypes = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
     conda:
         "../envs/scverse.yaml"
     log:
@@ -194,7 +193,7 @@ rule PlottingAnnotationsAutomatic:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
         plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
-        ctypes = config['QC_RNA']['PlottingAnnotations']['celltypes'],
+        ctypes = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
     conda:
         "../envs/scverse.yaml"
     log:
@@ -206,9 +205,69 @@ rule PlottingAnnotationsAutomatic:
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
-        --celltypes {params.ctypes} \
+        --celltype_key {params.ctypes} \
         --sample {wildcards.sample} \
         --plotdir {params.plotdir} \
         --doublets {params.doublets} \
         --mode auto
-        """      
+        """     
+
+rule ConcatanateAnnDataObjects:
+    input:
+        h5ads = expand("QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad", sample=SAMPLES.keys()),
+        markers =  f"{INPUT}/marker_genes.json"
+    output:
+        h5ad = "QC/RNA/Merged/merged.annotated.h5ad",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/ConcatanateAnnDataObjects.py",
+        plotdir = lambda wildcards: f"QC/RNA/Merged/Plots",
+        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        batch_key = config['QC_RNA']['ConcatanateAnnDataObjects']['batch_key'],
+        sample_key = config['QC_RNA']['ConcatanateAnnDataObjects']['sample_key'],
+        is_filtered = "--is_filtered" if IS_FILTERED else ""
+    conda:
+        "../envs/scverse.yaml"
+    log:
+        "logs/ConcatanateAnnDataObjects/merged.log"
+    benchmark:
+        "benchmark/ConcatanateAnnDataObjects/merged.benchmark.txt"
+    shell:
+        r"""
+        python -W ignore {params.script} \
+        --input {input.h5ads} \
+        --output {output.h5ad} \
+        --markers {input.markers} \
+        --plotdir {params.plotdir} \
+        --celltype_key {params.celltype_key} \
+        --batch_key {params.batch_key} \
+        --sample_key {params.sample_key} \
+        {params.is_filtered}
+        """
+
+rule BatchCorrection:
+    input:
+        h5ad = "QC/RNA/Merged/merged.annotated.h5ad",
+    output:
+        h5ad = "QC/RNA/Merged/merged.batch_corrected.h5ad",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/BatchCorrection.py",
+        plotdir = lambda wildcards: f"QC/RNA/Merged/Plots",
+        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        batch_key = config['QC_RNA']['ConcatanateAnnDataObjects']['batch_key'],
+        sample_key = config['QC_RNA']['ConcatanateAnnDataObjects']['sample_key'],
+    conda:
+        "../envs/scverse.yaml"
+    log:
+        "logs/BatchCorrection/merged.log"
+    benchmark:
+        "benchmark/BatchCorrection/merged.benchmark.txt"
+    shell:
+        r"""
+        python -W ignore {params.script} \
+        --input {input.h5ad} \
+        --output {output.h5ad} \
+        --plotdir {params.plotdir} \
+        --celltype_key {params.celltype_key} \
+        --batch_key {params.batch_key} \
+        --sample_key {params.sample_key}
+        """
