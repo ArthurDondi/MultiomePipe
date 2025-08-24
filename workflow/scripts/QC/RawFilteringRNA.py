@@ -65,15 +65,21 @@ def run_raw_filtering(adata, min_genes, min_cells, sample):
     )
     return adata
 
-def identify_doublets(adata):
-    sc.pp.scrublet(adata)
-    n_predicted_doublets = adata.obs['predicted_doublet'].sum()
+def identify_doublets(adata, doublet_threshold):
     total_cells = adata.n_obs
+    sc.pp.scrublet(adata)
+    adata.obs["predicted_doublet"] = adata.obs["doublet_score"] > doublet_threshold
+    n_predicted_doublets = adata.obs['predicted_doublet'].sum()
+    
     print(f"Predicted doublets: {n_predicted_doublets} over {total_cells} cells ({100 * n_predicted_doublets / total_cells:.1f}%)")
+
+    # Filtering doublets
+    adata = adata[~adata.obs["predicted_doublet"]]
+
     return adata
 
 
-def run_normalization_and_clustering(adata, sample):
+def run_normalization_and_clustering(adata, sample, is_filtered):
     # Saving count data
     adata.layers["counts"] = adata.X.copy()
     sc.pp.normalize_total(adata)
@@ -97,16 +103,22 @@ def run_normalization_and_clustering(adata, sample):
         sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res) # cluster labels in adata.obs['leiden']
     sc.pl.umap(adata,
             color=[f"leiden_res_{res:4.2f}" for res in [0.2, 0.5, 1]],
+            legend_loc="on data",
             show=False,
             save=f"_leiden_res_{sample}.png")
+    
+    if is_filtered:
+        QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score"]
+    else:
+        QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score", "background_fraction"]
     sc.pl.umap(adata,
-                color=["total_counts", "pct_counts_mt", "doublet_score", "background_fraction"],
+                color=QCs,
                 show=False,
                 save=f"_QC_{sample}.png")
 
     return adata
 
-def run_annotation(adata,markers_file,sample):
+def prepare_annotation(adata,markers_file,sample):
 
     with open(markers_file, "r") as f:
         marker_genes = json.load(f)
@@ -120,15 +132,15 @@ def run_annotation(adata,markers_file,sample):
                 markers_found.append(marker)
         marker_genes_in_data[ct] = markers_found
 
-    res = 0.5
-    sc.pl.dotplot(
-        adata,
-        groupby=f"leiden_res_{res:4.2f}",
-        var_names=marker_genes_in_data,
-        standard_scale="var",  # standard scale: normalize each gene to range from 0 to 1
-        show=False,
-        save=f"_leiden_res_{res:4.2f}_{sample}.png"
-    )
+    for res in [0.2, 0.5, 1]:
+        sc.pl.dotplot(
+            adata,
+            groupby=f"leiden_res_{res:4.2f}",
+            var_names=marker_genes_in_data,
+            standard_scale="var",  # standard scale: normalize each gene to range from 0 to 1
+            show=False,
+            save=f"_leiden_res_{res:4.2f}_{sample}.png"
+        )
     
     return adata
 
@@ -138,9 +150,11 @@ def initialize_parser():
     parser.add_argument('--output', type=str, required=True, help="h5ad")
     parser.add_argument('--markers', type=str, required=True, help="json")
     parser.add_argument('--sample', type=str, required=True)
-    parser.add_argument('--outdir', type=str, required=True)
+    parser.add_argument('--plotdir', type=str, required=True)
     parser.add_argument('--min_genes', type=int, default=100)
     parser.add_argument('--min_cells', type=int, default=3)
+    parser.add_argument('--doublet_threshold', type=float, default=.3)
+    parser.add_argument('--is_filtered', action='store_true')
     return parser
 
 # -----------------------------
@@ -154,11 +168,13 @@ def main():
     output_file = args.output
     markers = args.markers
     sample = args.sample
-    outdir = args.outdir
+    plotdir = args.plotdir
     min_genes = args.min_genes
     min_cells = args.min_cells
+    doublet_threshold = args.doublet_threshold
+    is_filtered = args.is_filtered
 
-    sc.settings.figdir = outdir  + "/Plots"
+    sc.settings.figdir = plotdir
 
     # 1. Load data
     print("1. Load data")
@@ -184,23 +200,24 @@ def main():
     # 4. Detecting Doublets
     print("4. Detecting Doublets")
     start = timeit.default_timer()
-    adata = identify_doublets(adata)
+    adata = identify_doublets(adata,doublet_threshold)
     stop = timeit.default_timer()
     print(f"Detecting doublets done in {round(stop-start,2)}s")
     
     # 4. Normalization + clustering
     print("4. Normalization + clustering")
     start = timeit.default_timer()
-    adata = run_normalization_and_clustering(adata, sample)
+    adata = run_normalization_and_clustering(adata, sample, is_filtered)
     stop = timeit.default_timer()
     print(f"Normalization + clustering done in {round(stop-start,2)}s")
 
-    # 5. Annotation
-    print("4. Annotation")
-    start = timeit.default_timer()
-    adata = run_annotation(adata,markers,sample)
-    stop = timeit.default_timer()
-    print(f"Annotation done in {round(stop-start,2)}s")
+    # 5. Annotation (run only if a file path is provided)
+    if markers != '':
+        print("4. Annotation")
+        start = timeit.default_timer()
+        adata = prepare_annotation(adata,markers,sample)
+        stop = timeit.default_timer()
+        print(f"Annotation done in {round(stop-start,2)}s")
 
     # 6. Write data
     print("5. Write data")

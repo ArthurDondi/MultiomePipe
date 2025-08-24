@@ -1,0 +1,76 @@
+import os
+import argparse
+import timeit
+import anndata as ad
+import scanpy as sc
+import json
+
+def plot_and_add_annotations(adata, annotation_file, output_file, sample, celltypes, doublets, leiden_res, mode):
+    
+    if mode == 'manual':
+        with open(annotation_file, "r") as f:
+            annotations = json.load(f)
+
+        adata.obs[celltypes] = adata.obs[leiden_res].map(annotations)
+
+    sc.pl.umap(adata,
+            color=celltypes,
+            legend_loc="on data",
+            legend_fontsize=8,
+            show=False,
+            save=f"_annotated_{sample}.png")
+    
+    adata = adata[~adata.obs[celltypes].isin(doublets)].copy()
+
+    sc.pl.umap(adata,
+            color=celltypes,
+            legend_loc="on data",
+            legend_fontsize=8,
+            show=False,
+            save=f"_annotated_clustersfiltered_{sample}.png")
+
+    adata.write(output_file)
+
+def initialize_parser():
+    parser = argparse.ArgumentParser(description='QC + clustering for 10X Multiome RNA')
+    parser.add_argument('--input', type=str, required=True, help="h5ad")
+    parser.add_argument('--output', type=str, required=True, help="h5ad")
+    parser.add_argument('--annotation', type=str, default='', help="json")
+    parser.add_argument('--sample', type=str, required=True)
+    parser.add_argument('--plotdir', type=str, required=True)
+    parser.add_argument('--doublets', type=str, nargs='+', required=True, help="List of names of clusters to remove")
+    parser.add_argument('--mode', type=str, required=True, choices=['auto', 'manual'], help="Automatic or manual annotation")
+    parser.add_argument('--celltypes', type=str, default ="cell_type", help="Name of celltype .obs column, default: 'cell_type'")
+    parser.add_argument('--leiden_res', type=str, default="leiden_res_1.00", help="leiden resolution used for manual annotation")
+    return parser
+
+# -----------------------------
+# Main
+# -----------------------------
+def main():
+    parser = initialize_parser()
+    args = parser.parse_args()
+
+    input_file = args.input
+    output_file = args.output
+    annotation_file = args.annotation
+    sample = args.sample
+    plotdir = args.plotdir
+    doublets = args.doublets
+    mode = args.mode
+    celltypes = args.celltypes
+    leiden_res = args.leiden_res
+    
+
+    sc.settings.figdir = plotdir
+
+    adata = ad.io.read_h5ad(input_file)
+
+    plot_and_add_annotations(adata, annotation_file, output_file, sample, celltypes, doublets, leiden_res, mode)
+
+    
+if __name__ == "__main__":
+    start_total = timeit.default_timer()
+    main()
+    stop_total = timeit.default_timer()
+    print(f"Total runtime: {round(stop_total-start_total,2)}s")

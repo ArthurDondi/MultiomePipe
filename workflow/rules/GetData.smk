@@ -2,7 +2,7 @@
 
 rule GetRawData:
     output:
-        f"{INPUT}/raw/{{sample}}.raw_feature_bc_matrix.h5"
+        f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
     params:
         url=lambda wildcards: SAMPLES[wildcards.sample]
     log:
@@ -16,12 +16,12 @@ rule GetRawData:
 
 rule GetRawMatrix:
     output:
-        f"{INPUT}/raw/{{sample}}/raw_feature_bc_matrix/matrix.mtx.gz",
-        f"{INPUT}/raw/{{sample}}/raw_feature_bc_matrix/barcodes.tsv.gz",
-        f"{INPUT}/raw/{{sample}}/raw_feature_bc_matrix/features.tsv.gz",
+        f"{INPUT}/{{sample}}/raw_feature_bc_matrix/matrix.mtx.gz",
+        f"{INPUT}/{{sample}}/raw_feature_bc_matrix/barcodes.tsv.gz",
+        f"{INPUT}/{{sample}}/raw_feature_bc_matrix/features.tsv.gz",
     params:
         url=lambda wildcards: SAMPLES[wildcards.sample],
-        outdir=f"{INPUT}/raw/"
+        outdir=f"{INPUT}/"
     log:
         "logs/GetRawMatrix/{sample}.log"
     benchmark:

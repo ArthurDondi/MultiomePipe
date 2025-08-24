@@ -2,10 +2,8 @@
 
 # Change those values to yours
 User:
-  input_dir: /home/dondia/run_MultiomePipe/input_data
-  output_dir: /home/dondia/run_MultiomePipe/output
-  sample_map: /path/to/sample_map.tsv
-  cancer_cell_type: HGSOC
+  input_dir: /home/dondia/run_MultiomePipe/input_neurips2021_BMMC
+  output_dir: /home/dondia/run_MultiomePipe/output_neurips2021_BMMC
   
 # Change any of those to True if you want to run it, else False
 Run:
@@ -15,15 +13,28 @@ Run:
   QC_ATAC: False
 
 samples:
-  #10X_granulocyte: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/pbmc_granulocyte_sorted_10k/pbmc_granulocyte_sorted_10k
-  human_brain_3k: https://cf.10xgenomics.com/samples/cell-arc/1.0.0/human_brain_3k/human_brain_3k
+  site1_donor1:
+  site1_donor2:
+  site1_donor3:
+  site2_donor1:
+  site2_donor4:
+  site2_donor5:
+  site3_donor3:
+  site3_donor6:
+  site3_donor7:
+  site3_donor10:
+  site4_donor1:
+  site4_donor8:
+  site4_donor9:
 
+IS_FILTERED: True
+IS_ANNOTATED: True
 
 QC_RNA:
   raw_data: True
 
   CellbenderRemoveBackgroundRNA:
-    n_splits: 10
+    n_cells: 10
     cuda: '' # change to '--cuda' if CUDA is installed and working
     expected-cells:
        human_brain_3k: 300
@@ -40,6 +51,7 @@ QC_RNA:
 
   PlottingAnnotations:
     doublets: "Doublets" # Name all the clusters you want to remove like this
+    celltypes: "cell_type"
 
 ### QC ATAC
 QC_ATAC:

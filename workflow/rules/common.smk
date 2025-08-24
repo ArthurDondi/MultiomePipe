@@ -6,7 +6,11 @@ QC_ATAC=config['Run']['QC_ATAC']
 
 INPUT = config['User']['input_dir']
 SAMPLES = config["samples"]
-Is = range(1,config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']+1)
+
+IS_FILTERED = config['IS_FILTERED']
+IS_ANNOTATED = config['IS_ANNOTATED']
+
+Is = range(1,config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_cells']+1)
 
 def get_CTYPES(samples):
     CTYPES = {}

@@ -2,36 +2,41 @@
 ### First applies rough filters with a pause to manually check
 ### Then remove doublets
 
+import os
+import json
 
-rule ElbowPlot:
+ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
+
+rule SplittingInput:
     input:
-        f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
+        f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
     output:
         expand("QC/RNA/{{sample}}/Subsampling/split_{i}.raw_feature_bc_matrix.h5", i=Is),
         png = "QC/RNA/{sample}/Plots/{sample}_ElbowPlot.png",
-        #"QC/RNA/{sample}/Subsampling/split_{i}.raw_feature_bc_matrix.h5"
     params:
-        script=f"{workflow.basedir}/scripts/QC/ElbowPlot.py",
-        outdir="QC/RNA",
-        n_splits = config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']
+        script=f"{workflow.basedir}/scripts/QC/SplittingInput.py",
+        outdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/SplittingInput/",
+        plotdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
+        n_cells = config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_cells']
     conda:
         "../envs/scverse.yaml"
     log:
-        "logs/ElbowPlot/{sample}.log"
+        "logs/SplittingInput/{sample}.log"
     benchmark:
-        "benchmark/ElbowPlot/{sample}.benchmark.txt"
+        "benchmark/SplittingInput/{sample}.benchmark.txt"
     shell:
         r"""
         python {params.script} \
         --h5in {input} \
-        --pngout {output.png} \
-        --outdir {params.outdir}/{wildcards.sample}/Subsampling/ \
-        --n_splits {params.n_splits}
+        --plotdir {params.plotdir} \
+        --outdir {params.outdir} \
+        --sample {wildcards.sample} \
+        --n_cells {params.n_cells}
         """    
 
 rule CellbenderRemoveBackgroundRNA:
     input:
-        h5 = "QC/RNA/{sample}/Subsampling/split_{i}.raw_feature_bc_matrix.h5"
+        h5 = "QC/RNA/{sample}/SplittingInput/split_{i}.raw_feature_bc_matrix.h5"
     output:
         h5 = "QC/RNA/{sample}/Cellbender/split_{i}_{sample}_cellbender.h5",
     params:
@@ -39,9 +44,9 @@ rule CellbenderRemoveBackgroundRNA:
         epochs=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['epochs'],
         checkpoint_mins=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['checkpoint_mins'],
         projected_ambient_count_threshold=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['projected_ambient_count_threshold'],
-        empty_drop_training_fraction=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['empty_drop_training_fraction'],
-        expected_cells=lambda wildcards: config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'][wildcards.sample],
-        total_droplets_included=lambda wildcards: 3 * config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'][wildcards.sample],
+        #empty_drop_training_fraction=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['empty_drop_training_fraction'],
+        #expected_cells=lambda wildcards: config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'][wildcards.sample],
+        #total_droplets_included=lambda wildcards: 3 * config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'][wildcards.sample],
     threads: 1
     conda:
         "../envs/cellbender.yaml"
@@ -56,10 +61,7 @@ rule CellbenderRemoveBackgroundRNA:
             --cpu-threads {threads} \
             --epochs {params.epochs} \
             --checkpoint-mins {params.checkpoint_mins} \
-            --expected-cells {params.expected_cells} \
-            --total-droplets-included {params.total_droplets_included} \
             --projected-ambient-count-threshold {params.projected_ambient_count_threshold} \
-            --empty-drop-training-fraction {params.empty_drop_training_fraction} \
             --input {input.h5} \
             --output {output.h5} \
             > {log} 2>&1
@@ -83,21 +85,24 @@ rule MergingCellbenderOutput:
     shell:
         r"""
         python -W ignore {params.script} \
-        --input {input} \
+        --input {input} \ 
         --output {output.merged}
         """
 
 rule RawFilteringRNA:
     input:
-        h5 = "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
-        markers = f"{INPUT}/{{sample}}/marker_genes.json"
+        h5ad = lambda wildcards: f"{INPUT}/{{sample}}.h5ad" if IS_FILTERED else "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
+        markers =  '' if IS_ANNOTATED else f"{INPUT}/marker_genes.json"
     output:
-        hd5mu = "QC/RNA/{sample}/Filtering/{sample}_filtered.hd5ad",
+        h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
     params:
         script = f"{workflow.basedir}/scripts/QC/RawFilteringRNA.py",
         dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Filtering/",
-        min_genes = config['QC_RNA']['min_genes'],
-        min_cells = config['QC_RNA']['min_cells']
+        plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
+        min_genes = config['QC_RNA']['RawFilteringRNA']['min_genes'],
+        min_cells = config['QC_RNA']['RawFilteringRNA']['min_cells'],
+        doublet_threshold = config['QC_RNA']['RawFilteringRNA']['doublet_threshold'],
+        is_filtered = "--is_filtered" if IS_FILTERED else ""
     conda:
         "../envs/scverse.yaml"
     log:
@@ -107,12 +112,103 @@ rule RawFilteringRNA:
     shell:
         r"""
         python -W ignore {params.script} \
-        --input {input.h5} \
-        --output {output.hd5mu} \
+        --input {input.h5ad} \
+        --output {output.h5ad} \
         --markers {input.markers} \
         --sample {wildcards.sample} \
-        --outdir {params.dir} \
+        --plotdir {params.plotdir} \
         --min_genes {params.min_genes} \
-        --min_cells {params.min_cells} 
+        --min_cells {params.min_cells} \
+        --doublet_threshold {params.doublet_threshold} \
+        {params.is_filtered}
         """
-        
+
+if not IS_ANNOTATED:
+    rule ManualAnnotation:
+        input:
+            hd5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
+        output:
+            manual_annotation = "QC/RNA/{sample}/Annotation/{sample}_manual_annotation.json",
+        shell:
+            "touch {output.manual_annotation}"
+
+
+    rule CheckManualAnnotation:
+        input:
+            manual_annotation="QC/RNA/{sample}/Annotation/{sample}_manual_annotation.json"
+        output:
+            touch("QC/RNA/{sample}/Annotation/{sample}_manual_annotation.checked")
+        run:
+            # Check if the file is empty
+            if os.path.getsize(input.manual_annotation) == 0:
+                raise RuntimeError(f"ERROR: Annotation file {input.manual_annotation} is empty! Please manually create a JSON with 'Cluster_number':'Celltype' format")
+            
+            # Check if the file is valid JSON and not empty
+            try:
+                with open(input.manual_annotation) as f:
+                    data = json.load(f)
+            except json.JSONDecodeError:
+                raise RuntimeError(f"ERROR: Annotation file {input.manual_annotation} is not valid JSON! Please manually create a JSON with 'Cluster_number':'Celltype' format")
+            
+            if not data:
+                raise RuntimeError(f"ERROR: Annotation file {input.manual_annotation} contains no data!Please manually create a JSON with 'Cluster_number':'Celltype' format")
+    
+
+rule PlottingAnnotationsManual:
+    input:
+        h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
+        manual_annotation = "QC/RNA/{sample}/Annotation/{sample}_manual_annotation.json",
+        check = "QC/RNA/{sample}/Annotation/{sample}_manual_annotation.checked"
+    output:
+        h5ad = "QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
+        plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
+        doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
+        ctypes = config['QC_RNA']['PlottingAnnotations']['celltypes'],
+    conda:
+        "../envs/scverse.yaml"
+    log:
+        "logs/PlottingAnnotations/{sample}.log"
+    benchmark:
+        "benchmark/PlottingAnnotations/{sample}.benchmark.txt"
+    shell:
+        r"""
+        python -W ignore {params.script} \
+        --input {input.h5ad} \
+        --output {output.h5ad} \
+        --annotation {input.manual_annotation} \
+        --sample {wildcards.sample} \
+        --plotdir {params.plotdir} \
+        --celltypes {params.ctypes} \
+        --doublets {params.doublets} \
+        --mode manual
+        """
+
+rule PlottingAnnotationsAutomatic:
+    input:
+        h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
+    output:
+        h5ad = "QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
+        plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
+        doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
+        ctypes = config['QC_RNA']['PlottingAnnotations']['celltypes'],
+    conda:
+        "../envs/scverse.yaml"
+    log:
+        "logs/PlottingAnnotations/{sample}.log"
+    benchmark:
+        "benchmark/PlottingAnnotations/{sample}.benchmark.txt"
+    shell:
+        r"""
+        python -W ignore {params.script} \
+        --input {input.h5ad} \
+        --output {output.h5ad} \
+        --celltypes {params.ctypes} \
+        --sample {wildcards.sample} \
+        --plotdir {params.plotdir} \
+        --doublets {params.doublets} \
+        --mode auto
+        """      
