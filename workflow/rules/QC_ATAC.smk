@@ -13,7 +13,7 @@ rule all_QC_ATAC:
 rule ExportPseudobulk:
     input:
         fragments = f"{INPUT}/raw/{{sample}}.fragments.tsv.gz",
-        cell_data = f"{INPUT}/{{sample}}/cell_data.tsv"
+        cell_data = "QC/RNA/{sample}/Annotation/{sample}_CellTypeAnnotations.csv"
     output:
         bed_paths = "QC/ATAC/{sample}/bed_paths.tsv",
         bw_paths  = "QC/ATAC/{sample}/bw_paths.tsv"

@@ -29,16 +29,14 @@ samples:
 
 IS_FILTERED: True
 IS_ANNOTATED: True
+IS_BATCHED: True
 
 QC_RNA:
   raw_data: True
 
   CellbenderRemoveBackgroundRNA:
-    n_cells: 10
+    n_splits: 10
     cuda: '' # change to '--cuda' if CUDA is installed and working
-    expected-cells:
-       human_brain_3k: 300
-       10X_granulocyte: 1000
     epochs: 50
     checkpoint_mins: 1
     projected_ambient_count_threshold: 0.05

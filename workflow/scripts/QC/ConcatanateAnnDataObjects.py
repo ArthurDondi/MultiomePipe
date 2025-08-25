@@ -54,7 +54,7 @@ def run_normalization_and_clustering(adata, celltype_key, batch_key, sample_key,
 
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
-    sc.pp.highly_variable_genes(adata, n_top_genes=2000)
+    sc.pp.highly_variable_genes(adata, n_top_genes=2000,batch_key=batch_key)
     # Plot highly variable genes:
     sc.pl.highly_variable_genes(adata,
                                 show=False,
@@ -69,6 +69,7 @@ def run_normalization_and_clustering(adata, celltype_key, batch_key, sample_key,
                              show=False,
                              save=f"_merge.png")
     sc.tl.umap(adata)
+    adata.obsm["X_umap_nocorrection"] = adata.obsm["X_umap"].copy()
     for res in [0.2, 0.5, 1]:
         sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res) # cluster labels in adata.obs['leiden']
     sc.pl.umap(adata,

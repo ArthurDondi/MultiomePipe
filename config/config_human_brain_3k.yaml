@@ -18,12 +18,13 @@ samples:
 
 IS_FILTERED: False
 IS_ANNOTATED: False
+IS_BATCHED: False
 
 QC_RNA:
   raw_data: True
 
   CellbenderRemoveBackgroundRNA:
-    n_cells: 10
+    n_splits: 10
     cuda: '' # change to '--cuda' if CUDA is installed and working
     expected-cells:
        human_brain_3k: 300

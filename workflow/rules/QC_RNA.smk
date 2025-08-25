@@ -11,13 +11,12 @@ rule SplittingInput:
     input:
         f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
     output:
-        expand("QC/RNA/{{sample}}/Subsampling/split_{i}.raw_feature_bc_matrix.h5", i=Is),
-        png = "QC/RNA/{sample}/Plots/{sample}_ElbowPlot.png",
+        expand("QC/RNA/{{sample}}/SplittingInput/split_{i}.raw_feature_bc_matrix.h5", i=SPLITS),
     params:
         script=f"{workflow.basedir}/scripts/QC/SplittingInput.py",
         outdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/SplittingInput/",
         plotdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
-        n_cells = config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_cells']
+        n_splits = config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']
     conda:
         "../envs/scverse.yaml"
     log:
@@ -31,7 +30,7 @@ rule SplittingInput:
         --plotdir {params.plotdir} \
         --outdir {params.outdir} \
         --sample {wildcards.sample} \
-        --n_cells {params.n_cells}
+        --n_splits {params.n_splits}
         """    
 
 rule CellbenderRemoveBackgroundRNA:
@@ -63,14 +62,13 @@ rule CellbenderRemoveBackgroundRNA:
             --checkpoint-mins {params.checkpoint_mins} \
             --projected-ambient-count-threshold {params.projected_ambient_count_threshold} \
             --input {input.h5} \
-            --output {output.h5} \
-            > {log} 2>&1
+            --output {output.h5}
         rm ckpt.tar.gz 
         """
 
 rule MergingCellbenderOutput:
     input:
-        expand("QC/RNA/{{sample}}/Cellbender/split_{i}_{{sample}}_cellbender.h5", i=Is),
+        expand("QC/RNA/{{sample}}/Cellbender/split_{i}_{{sample}}_cellbender.h5", i=SPLITS),
     output:
         merged = "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
     params:
@@ -85,7 +83,7 @@ rule MergingCellbenderOutput:
     shell:
         r"""
         python -W ignore {params.script} \
-        --input {input} \ 
+        --input {input} \
         --output {output.merged}
         """
 
@@ -118,8 +116,8 @@ rule RawFilteringRNA:
         --plotdir {params.plotdir} \
         --min_genes {params.min_genes} \
         --min_cells {params.min_cells} \
-        --doublet_threshold {params.doublet_threshold} \
-        {params.is_filtered}
+        {params.is_filtered} \
+        --doublet_threshold {params.doublet_threshold}
         """
 
 if not IS_ANNOTATED:
@@ -160,11 +158,12 @@ rule PlottingAnnotationsManual:
         check = "QC/RNA/{sample}/Annotation/{sample}_manual_annotation.checked"
     output:
         h5ad = "QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad",
+        csv = "QC/RNA/{sample}/Annotation/{sample}_CellTypeAnnotations.csv",
     params:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
         plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
-        ctypes = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
     conda:
         "../envs/scverse.yaml"
     log:
@@ -176,10 +175,11 @@ rule PlottingAnnotationsManual:
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
-        --annotation {input.manual_annotation} \
+        --annotation_input {input.manual_annotation} \
+        --annotation_output {output.csv} \
         --sample {wildcards.sample} \
         --plotdir {params.plotdir} \
-        --celltypes {params.ctypes} \
+        --celltype_key {params.celltype_key} \
         --doublets {params.doublets} \
         --mode manual
         """
@@ -189,11 +189,12 @@ rule PlottingAnnotationsAutomatic:
         h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
     output:
         h5ad = "QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad",
+        csv = "QC/RNA/{sample}/Annotation/{sample}_CellTypeAnnotations.csv",
     params:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
         plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
-        ctypes = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
     conda:
         "../envs/scverse.yaml"
     log:
@@ -205,13 +206,13 @@ rule PlottingAnnotationsAutomatic:
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
-        --celltype_key {params.ctypes} \
+        --annotation_output {output.csv} \
+        --celltype_key {params.celltype_key} \
         --sample {wildcards.sample} \
         --plotdir {params.plotdir} \
         --doublets {params.doublets} \
         --mode auto
         """     
-
 rule ConcatanateAnnDataObjects:
     input:
         h5ads = expand("QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad", sample=SAMPLES.keys()),
@@ -249,6 +250,7 @@ rule BatchCorrection:
         h5ad = "QC/RNA/Merged/merged.annotated.h5ad",
     output:
         h5ad = "QC/RNA/Merged/merged.batch_corrected.h5ad",
+        csv = "QC/RNA/Merged/CellTypeAnnotations.csv"
     params:
         script = f"{workflow.basedir}/scripts/QC/BatchCorrection.py",
         plotdir = lambda wildcards: f"QC/RNA/Merged/Plots",
@@ -266,8 +268,10 @@ rule BatchCorrection:
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
+        --annotations {output.csv} \
         --plotdir {params.plotdir} \
         --celltype_key {params.celltype_key} \
         --batch_key {params.batch_key} \
         --sample_key {params.sample_key}
         """
+

@@ -5,14 +5,21 @@ include: 'rules/QC_RNA.smk'
 include: 'rules/QC_ATAC.smk'
 
 # Define results working directory
-workdir: config['User']['output_dir']\
+workdir: config['User']['output_dir']
 
+if QC_RNA:
+    if IS_BATCHED:
+        qc_rna_input = "QC/RNA/Merged/merged.batch_corrected.h5ad"
+    else:
+        qc_rna_input = expand("QC/RNA/{sample}/Annotation/{sample}_annotated.h5ad", sample=SAMPLES.keys())
+else:
+    qc_rna_input = []
 
 rule MultiomePipe_output:
     input:
         # QC RNA
-        "QC/RNA/Merged/merged.batch_corrected.h5ad" if QC_RNA else [],
-        #expand("QC/RNA/{sample}/{sample}_processed.rds", sample=SAMPLES.keys()) if QC_RNA else [],
+        qc_rna_input,
+        expand("QC/RNA/{sample}/Annotation/{sample}_CellTypeAnnotations.csv", sample=SAMPLES.keys()),
         # QC ATAC
         expand("QC/ATAC/{sample}.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
     default_target: True
