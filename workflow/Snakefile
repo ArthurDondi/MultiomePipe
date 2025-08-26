@@ -2,7 +2,7 @@
 include: 'rules/common.smk'
 include: 'rules/GetData.smk'
 include: 'rules/QC_RNA.smk'
-include: 'rules/QC_ATAC.smk'
+#include: 'rules/QC_ATAC.smk'
 
 # Define results working directory
 workdir: config['User']['output_dir']

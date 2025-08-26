@@ -75,7 +75,7 @@ def write_10X_h5(adata, file):
     grp.create_dataset("indptr", data=np.array(adata.X.indptr, dtype=f'<i{int_max(adata.X.indptr)}'))
     grp.create_dataset("shape", data=np.array(list(adata.X.shape)[::-1], dtype=f'<i{int_max(adata.X.shape)}'))
 
-def subset(adata, outdir,  n_splits):
+def subset(adata, outdir, sample, n_splits):
     """
     Subset a fraction of cells and save in 10X format for CellBender.
     """
@@ -87,35 +87,28 @@ def subset(adata, outdir,  n_splits):
     # Create and save subsets
     for i, idx in enumerate(indices, start=1):
         subset = adata[idx, :].copy()  # subset cells, keep all features
-        write_10X_h5(subset, f"{outdir}/split_{i}.raw_feature_bc_matrix.h5")
+        write_10X_h5(subset, f"{outdir}/split_{i}_{sample}.raw_feature_bc_matrix.h5")
         print(f"Saved split_{i}.h5ad with {subset.n_obs} cells")  
 
 def main():
     parser = argparse.ArgumentParser(description="Generate elbow plot from an AnnData object")
     parser.add_argument("--h5in", type=str, help="Path to the .h5ad AnnData file")
     parser.add_argument("--outdir", type=str, help="Directory for the splitted h5s")
-    parser.add_argument("--plotdir", type=str, help="Directory for plots")
+    parser.add_argument("--pngout", type=str, help="ElbowPlot.png")
     parser.add_argument("--sample", type=str, help="Sample name")
     parser.add_argument("--n_splits", type=int, help="Number of chunks to divide the sample")
 
     args = parser.parse_args()
 
     # Load AnnData
-    if args.h5in.split('.')[-1] == 'h5':
-        adata = sc.read_10x_h5(args.h5in)
-    elif args.h5in.split('.')[-1] == 'h5ad':
-        adata = ad.io.read_h5ad(args.h5in)
-    else:
-        print("Input data must either be raw_feature_bc_matrix.h5 or an AnnData .h5ad")
-        sys.exit(0) 
+    adata = sc.read_10x_h5(args.h5in)
 
     # Plot elbow
-    pngout = args.plotdir + '/' + args.sample + ".ElbowPlot.png"
-    plot_elbow(adata,pngout)
+    plot_elbow(adata,args.pngout)
 
     # Subset data to run on local machine
     
-    subset(adata, args.outdir, args.n_splits)
+    subset(adata, args.outdir, args.sample, args.n_splits)
 
 if __name__ == "__main__":
     start_time = timeit.default_timer()

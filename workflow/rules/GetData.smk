@@ -11,7 +11,7 @@ rule GetRawData:
         "benchmark/GetRawData/{sample}.benchmark.txt"
     shell:
         r"""
-        wget -O {output} {params.url}_raw_feature_bc_matrix.h5
+        wget -O {output} "{params.url}"
         """
 
 rule GetRawMatrix:

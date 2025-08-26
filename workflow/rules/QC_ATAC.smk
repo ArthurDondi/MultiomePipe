@@ -7,9 +7,6 @@ rule all_QC_ATAC:
     input:
         expand("QC/ATAC/{sample}_consensus_peaks.bed", sample=SAMPLES)
 
-###############################################################################
-# 1) pseudobulk export 
-###############################################################################
 rule ExportPseudobulk:
     input:
         fragments = f"{INPUT}/raw/{{sample}}.fragments.tsv.gz",

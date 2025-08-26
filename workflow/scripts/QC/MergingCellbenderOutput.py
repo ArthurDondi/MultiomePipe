@@ -1,12 +1,19 @@
 import argparse
 import timeit
-from cellbender.remove_background.downstream import anndata_from_h5
+from cellbender.remove_background.downstream import load_anndata_from_input_and_output
 import anndata as ad
+
+adata2 = load_anndata_from_input_and_output(
+    input_file="../Subsampling/split_9.raw_feature_bc_matrix.h5",
+    output_file="split_9_human_brain_3k_cellbender_filtered.h5",
+    input_layer_key='raw',  # this will be the raw data layer
+)
 
 def initialize_parser():
     parser = argparse.ArgumentParser(description='Merging splitted outputs from cellbender')
-    parser.add_argument('--input', nargs="+", required=True)
-    parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--cellbender_input', nargs="+", required=True, help="List of input files of cellbender")
+    parser.add_argument('--cellbender_output', nargs="+", required=True, help="List of filtered output files of cellbender")
+    parser.add_argument('--output', type=str, required=True, help="h5ad")
     return parser
 
 # -----------------------------
@@ -16,13 +23,20 @@ def main():
     parser = initialize_parser()
     args = parser.parse_args()
 
-    input_files = args.input
+    cellbender_input = args.cellbender_input
+    cellbender_output = args.cellbender_output
     output_file = args.output
 
     # 1. Merge data
     print("1. Load data")
     start = timeit.default_timer()
-    adatas = [anndata_from_h5(f) for f in input_files]
+    adatas = [load_anndata_from_input_and_output(input_file=f1,
+                                                 output_file=f2,
+                                                 input_layer_key='raw'
+                                                 )
+                                                for f1, f2 in zip(cellbender_input, cellbender_output)
+                ]
+
     for adata in adatas:
         adata.var_names_make_unique()
     adata_concat = ad.concat(

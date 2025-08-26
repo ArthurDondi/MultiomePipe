@@ -11,11 +11,11 @@ rule SplittingInput:
     input:
         f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
     output:
-        expand("QC/RNA/{{sample}}/SplittingInput/split_{i}.raw_feature_bc_matrix.h5", i=SPLITS),
+        expand("QC/RNA/{{sample}}/SplittingInput/split_{i}_{{sample}}.raw_feature_bc_matrix.h5", i=SPLITS),
+        pngout = "QC/RNA/{sample}/Plots/{sample}.ElbowPlot.png"
     params:
         script=f"{workflow.basedir}/scripts/QC/SplittingInput.py",
         outdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/SplittingInput/",
-        plotdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         n_splits = config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']
     conda:
         "../envs/scverse.yaml"
@@ -25,9 +25,9 @@ rule SplittingInput:
         "benchmark/SplittingInput/{sample}.benchmark.txt"
     shell:
         r"""
-        python {params.script} \
+        python -W ignore {params.script} \
         --h5in {input} \
-        --plotdir {params.plotdir} \
+        --pngout {output.pngout} \
         --outdir {params.outdir} \
         --sample {wildcards.sample} \
         --n_splits {params.n_splits}
@@ -35,17 +35,17 @@ rule SplittingInput:
 
 rule CellbenderRemoveBackgroundRNA:
     input:
-        h5 = "QC/RNA/{sample}/SplittingInput/split_{i}.raw_feature_bc_matrix.h5"
+        h5 = "QC/RNA/{sample}/SplittingInput/split_{i}_{sample}.raw_feature_bc_matrix.h5"
     output:
-        h5 = "QC/RNA/{sample}/Cellbender/split_{i}_{sample}_cellbender.h5",
+        h5 = "QC/RNA/{sample}/Cellbender/split_{i}_{sample}_cellbender_filtered.h5",
     params:
         cuda=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['cuda'],
         epochs=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['epochs'],
         checkpoint_mins=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['checkpoint_mins'],
         projected_ambient_count_threshold=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['projected_ambient_count_threshold'],
-        #empty_drop_training_fraction=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['empty_drop_training_fraction'],
-        #expected_cells=lambda wildcards: config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'][wildcards.sample],
-        #total_droplets_included=lambda wildcards: 3 * config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'][wildcards.sample],
+        empty_drop_training_fraction=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['empty_drop_training_fraction'],
+        expected_cells=lambda wildcards: config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'],
+        total_droplets_included=lambda wildcards: 3 * config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'],
     threads: 1
     conda:
         "../envs/cellbender.yaml"
@@ -68,7 +68,8 @@ rule CellbenderRemoveBackgroundRNA:
 
 rule MergingCellbenderOutput:
     input:
-        expand("QC/RNA/{{sample}}/Cellbender/split_{i}_{{sample}}_cellbender.h5", i=SPLITS),
+        cellbender_input = expand("QC/RNA/{{sample}}/SplittingInput/split_{i}_{{sample}}.raw_feature_bc_matrix.h5", i=SPLITS),
+        cellbender_output = expand("QC/RNA/{{sample}}/Cellbender/split_{i}_{{sample}}_cellbender_filtered.h5", i=SPLITS),
     output:
         merged = "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
     params:
@@ -83,7 +84,8 @@ rule MergingCellbenderOutput:
     shell:
         r"""
         python -W ignore {params.script} \
-        --input {input} \
+        --cellbender_input {input.cellbender_input} \
+        --cellbender_output {input.cellbender_output} \
         --output {output.merged}
         """
 
