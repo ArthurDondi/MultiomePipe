@@ -8,8 +8,9 @@ import json
 # -----------------------------
 # Functions
 # -----------------------------
-def merge_data(input_files):
-    adatas = [ad.io.read_h5ad(f) for f in input_files]
+def merge_data(input_files, samples):
+
+    adatas = [ad.io.read_h5ad(f) for f in sorted(input_files)]
     for adata in adatas:
         adata.var_names_make_unique()
     print("Concat")
@@ -17,13 +18,13 @@ def merge_data(input_files):
         adatas,
         merge="first",
         uns_merge="first",
-        join="outer",
-        label="split",
-        keys=[f"split{i}" for i in range(len(adatas))]
+        join="inner",
+        label="sample",
+        keys=sorted(samples)
     )
     print("Concat done")
     del adatas
-    adata_concat.X = adata_concat.layers['counts']
+    adata_concat.X = adata_concat.layers['cellbender']
     return adata_concat
 
 def plot_qc_metrics(adata):
@@ -50,11 +51,11 @@ def plot_qc_metrics(adata):
     )
 
 
-def run_normalization_and_clustering(adata, celltype_key, batch_key, sample_key, is_filtered):
-
+def run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered):
+    print()
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
-    sc.pp.highly_variable_genes(adata, n_top_genes=2000,batch_key=batch_key)
+    sc.pp.highly_variable_genes(adata, n_top_genes=2000,batch_key=sample_key)
     # Plot highly variable genes:
     sc.pl.highly_variable_genes(adata,
                                 show=False,
@@ -87,53 +88,20 @@ def run_normalization_and_clustering(adata, celltype_key, batch_key, sample_key,
                 show=False,
                 save=f"_QC_merge.png")
     sc.pl.umap(adata,
-                color=[batch_key,sample_key],
+                color=[donor_key,sample_key],
                 show=False,
                 save=f"_batch_nocorrection_merge.png")
-    sc.pl.umap(adata,
-                color=celltype_key,
-                legend_loc="on data",
-                legend_fontsize=8,
-                show=False,
-                save=f"_annotated_merge.png")
-    
-    return adata
-
-def prepare_annotation(adata,markers_file):
-
-    with open(markers_file, "r") as f:
-        marker_genes = json.load(f)
-
-    # Keeping only genes in dataset
-    marker_genes_in_data = {}
-    for ct, markers in marker_genes.items():
-        markers_found = []
-        for marker in markers:
-            if marker in adata.var.index:
-                markers_found.append(marker)
-        marker_genes_in_data[ct] = markers_found
-
-    for res in [0.2, 0.5, 1]:
-        sc.pl.dotplot(
-            adata,
-            groupby=f"leiden_res_{res:4.2f}",
-            var_names=marker_genes_in_data,
-            standard_scale="var",  # standard scale: normalize each gene to range from 0 to 1
-            show=False,
-            save=f"_leiden_res_{res:4.2f}_merge.png"
-        )
     
     return adata
 
 def initialize_parser():
     parser = argparse.ArgumentParser(description='Merging adatas from all samples and plotting')
-    parser.add_argument('--input', type=str, nargs='+', required=True, help="h5ad list")
+    parser.add_argument('--input', type=str, nargs='+', required=True, help="space separated h5ad list")
     parser.add_argument('--output', type=str, required=True, help="h5ad")
-    parser.add_argument('--markers', type=str, required=True, help="json")
+    parser.add_argument('--samples', type=str, nargs='+', required=True, help="space separated sample names list")
     parser.add_argument('--plotdir', type=str, required=True)
-    parser.add_argument('--celltype_key', type=str, required=True)
     parser.add_argument('--sample_key', type=str, required=True)
-    parser.add_argument('--batch_key', type=str, required=True)
+    parser.add_argument('--donor_key', type=str, required=True)
     parser.add_argument('--is_filtered', action='store_true')
     return parser
 
@@ -146,10 +114,9 @@ def main():
 
     input_files = args.input
     output_file = args.output
-    markers = args.markers
+    samples = args.samples
     plotdir = args.plotdir
-    celltype_key = args.celltype_key
-    batch_key = args.batch_key
+    donor_key = args.donor_key
     sample_key = args.sample_key
     is_filtered = args.is_filtered
 
@@ -158,7 +125,7 @@ def main():
     # 1. Merge data
     print("1. Merge data")
     start = timeit.default_timer()
-    adata = merge_data(input_files)
+    adata = merge_data(input_files, samples)
     stop = timeit.default_timer()
     print(f"Loaded data in {round(stop-start,2)}s")
 
@@ -172,22 +139,12 @@ def main():
     # 3. Normalization + clustering
     print("3. Normalization + clustering")
     start = timeit.default_timer()
-    adata = run_normalization_and_clustering(adata, celltype_key, batch_key, sample_key, is_filtered)
+    adata = run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered)
     stop = timeit.default_timer()
     print(f"Normalization + clustering done in {round(stop-start,2)}s")
 
-    # 4. Annotation (run only if a file path is provided)
-    print("4. Annotation")
-    if markers != '':
-        start = timeit.default_timer()
-        adata = prepare_annotation(adata,markers)
-        stop = timeit.default_timer()
-        print(f"Annotation done in {round(stop-start,2)}s")
-    else:
-        print("No marker genes file provided")
-
-    # 5. Write data
-    print("5. Write data")
+    # 4. Write data
+    print("4. Write data")
     start = timeit.default_timer()
     adata.write_h5ad(output_file)
     stop = timeit.default_timer()

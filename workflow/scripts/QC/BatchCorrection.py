@@ -1,4 +1,5 @@
 import os
+import json
 import argparse
 import timeit
 import anndata as ad
@@ -6,39 +7,82 @@ import scanpy as sc
 import scanpy.external as sce
 import pandas as pd
 
-def write_data(adata,annotations,output_file):
-    # Start with obs
-    df = adata.obs.copy()
+def prepare_annotation(adata,markers_file):
 
-    # Add one embedding (e.g. UMAP)
-    if "X_umap" in adata.obsm:
-        umap_df = pd.DataFrame(
-            adata.obsm["X_umap"],
-            index=adata.obs.index,
-            columns=["UMAP1", "UMAP2"]
+    with open(markers_file, "r") as f:
+        marker_genes = json.load(f)
+
+    # Keeping only genes in dataset
+    marker_genes_in_data = {}
+    for ct, markers in marker_genes.items():
+        markers_found = []
+        for marker in markers:
+            if marker in adata.var.index:
+                markers_found.append(marker)
+        marker_genes_in_data[ct] = markers_found
+
+    for res in [0.2, 0.5, 1]:
+        sc.pl.dotplot(
+            adata,
+            groupby=f"leiden_res_{res:4.2f}",
+            var_names=marker_genes_in_data,
+            standard_scale="var",  # standard scale: normalize each gene to range from 0 to 1
+            show=False,
+            save=f"_manual_markers_leiden_res_{res:4.2f}_merge.png"
         )
-        df = pd.concat([df, umap_df], axis=1)
+    
+    return adata
 
-    if "X_umap_nocorrection" in adata.obsm:
-        umap_df = pd.DataFrame(
-            adata.obsm["X_umap_nocorrection"],
-            index=adata.obs.index,
-            columns=["UMAP1_nocorrection", "UMAP2_nocorrection"]
-        )
-        df = pd.concat([df, umap_df], axis=1)
+def clustering(adata,sample_key,donor_key,is_filtered):
 
-    df.to_csv(annotations, sep=",", index=True)
-    adata.write_h5ad(output_file)
+    sc.pp.neighbors(adata, use_rep='X_pca_harmony')
+    sc.tl.umap(adata)
+
+    for res in [0.2, 0.5, 1]:
+        sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res)
+        sc.tl.rank_genes_groups(adata, groupby=f"leiden_res_{res:4.2f}", method="wilcoxon")
+        sc.pl.rank_genes_groups_dotplot(adata, 
+                                        groupby=f"leiden_res_{res:4.2f}",
+                                        standard_scale="var",
+                                        n_genes=5,
+                                        show=False,
+                                        save=f"_diff_markers_leiden_res_{res:4.2f}_merge.png")
+    sc.pl.umap(adata,
+            color=[f"leiden_res_{res:4.2f}" for res in [0.2, 0.5, 1]],
+            legend_loc="on data",
+            show=False,
+            save=f"_leiden_res_merge.png")
+        
+    if is_filtered:
+        QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score"]
+    else:
+        QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score", "background_fraction"]
+    sc.pl.umap(adata,
+                color=QCs,
+                show=False,
+                save=f"_QC_merge.png")
+    
+    sc.pl.umap(adata,
+                color=[donor_key,sample_key],
+                show=False,
+                save=f"_merge.png")
+    
+    
+    sc.pl.umap(adata,
+            color=[f"leiden_res_{res:4.2f}" for res in [0.2, 0.5, 1]],
+            legend_loc="on data",
+            show=False,
+            save=f"_leiden_res_merge.png")
 
 def initialize_parser():
     parser = argparse.ArgumentParser(description='Correcting batches and samples using Harmony')
-    parser.add_argument('--input', type=str, required=True, help="h5ad list")
+    parser.add_argument('--input', type=str, required=True, help="h5ad")
     parser.add_argument('--output', type=str, required=True, help="h5ad")
-    parser.add_argument('--annotations', type=str, required=True, help="csv")
+    parser.add_argument('--markers', type=str, required=True, help="json")
     parser.add_argument('--plotdir', type=str, required=True)
-    parser.add_argument('--celltype_key', type=str, required=True)
+    parser.add_argument('--is_filtered', action='store_true')
     parser.add_argument('--sample_key', type=str, required=True)
-    parser.add_argument('--batch_key', type=str, required=True)
+    parser.add_argument('--donor_key', type=str, required=True)
     return parser
 
 # -----------------------------
@@ -50,11 +94,11 @@ def main():
 
     input_file = args.input
     output_file = args.output
-    annotations = args.annotations
+    markers = args.markers
     plotdir = args.plotdir
-    celltype_key = args.celltype_key
-    batch_key = args.batch_key
+    donor_key = args.donor_key
     sample_key = args.sample_key
+    is_filtered = args.is_filtered
 
     sc.settings.figdir = plotdir
 
@@ -67,28 +111,28 @@ def main():
 
     print("2. Batch correction (Harmony)")
     start = timeit.default_timer()
-    sce.pp.harmony_integrate(adata, key=[batch_key,sample_key])
+    sce.pp.harmony_integrate(adata, key=[donor_key,sample_key])
     stop = timeit.default_timer()
     print(f"Batches corrected in {round(stop-start,2)}s")
 
-    print("4. Plotting UMAPs")
+    print("3. Clustering")
     start = timeit.default_timer()
-    sc.pp.neighbors(adata, use_rep='X_pca_harmony')
-    sc.tl.umap(adata)
-    sc.pl.umap(adata,
-                color=[sample_key,batch_key],
-                show=False,
-                save=f"_batch_corrected_merge.png")
-    sc.pl.umap(adata,
-                color=celltype_key,
-                show=False,
-                save=f"_annotation_batch_corrected_merge.png")
+    clustering(adata,sample_key,donor_key,is_filtered)
     stop = timeit.default_timer()
-    print(f"UMAPs plotted in {round(stop-start,2)}s")
+    print(f"Clustered in {round(stop-start,2)}s")
+
+    print("4. Plot dotplots for Annotation")
+    if markers != '':
+        start = timeit.default_timer()
+        adata = prepare_annotation(adata,markers)
+        stop = timeit.default_timer()
+        print(f"Dotplots plotted in in {round(stop-start,2)}s")
+    else:
+        print("No marker genes file provided")
 
     print("5. Write data")
     start = timeit.default_timer()
-    write_data(adata,annotations,output_file)
+    adata.write_h5ad(output_file)
     stop = timeit.default_timer()
     print(f"Data written in {round(stop-start,2)}s")
 

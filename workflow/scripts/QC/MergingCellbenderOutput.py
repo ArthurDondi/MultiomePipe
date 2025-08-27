@@ -3,12 +3,6 @@ import timeit
 from cellbender.remove_background.downstream import load_anndata_from_input_and_output
 import anndata as ad
 
-adata2 = load_anndata_from_input_and_output(
-    input_file="../Subsampling/split_9.raw_feature_bc_matrix.h5",
-    output_file="split_9_human_brain_3k_cellbender_filtered.h5",
-    input_layer_key='raw',  # this will be the raw data layer
-)
-
 def initialize_parser():
     parser = argparse.ArgumentParser(description='Merging splitted outputs from cellbender')
     parser.add_argument('--cellbender_input', nargs="+", required=True, help="List of input files of cellbender")
