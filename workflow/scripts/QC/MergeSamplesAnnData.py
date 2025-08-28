@@ -11,8 +11,10 @@ import json
 def merge_data(input_files, samples):
 
     adatas = [ad.io.read_h5ad(f) for f in sorted(input_files)]
-    for adata in adatas:
+    #Adding sample name to cell names
+    for adata,sample in zip(adatas,samples):
         adata.var_names_make_unique()
+        adata.obs_names = adata.obs_names+'_'+sample
     print("Concat")
     adata_concat = ad.concat(
         adatas,
@@ -52,7 +54,7 @@ def plot_qc_metrics(adata):
 
 
 def run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered):
-    print()
+
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
     sc.pp.highly_variable_genes(adata, n_top_genes=2000,batch_key=sample_key)

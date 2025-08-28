@@ -194,7 +194,7 @@ rule BatchCorrection:
 if not IS_ANNOTATED:
     rule ManualAnnotation:
         input:
-            hd5ad = "QC/RNA/Merged/merged.batch_corrected.h5ad",
+            hd5ad = "QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
         output:
             manual_annotation = "QC/RNA/Merged/Annotation/merged_manual_annotation.json",
         shell:
@@ -228,11 +228,11 @@ rule PlottingAnnotationsManual:
         manual_annotation = "QC/RNA/Merged/Annotation/merged_manual_annotation.json",
         check = "QC/RNA/Merged/Annotation/merged_manual_annotation.checked"
     output:
-        h5ad = "QC/RNA/Merge/Annotation/merged.annotated.h5ad",
-        csv = "QC/RNA/Merge/Annotation/merged.CellTypeAnnotations.csv",
+        h5ad = "QC/RNA/Merged/Annotation/merged.annotated.h5ad",
+        csv = "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv",
     params:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
-        plotdir = "QC/RNA/Merge/Annotation/Plots",
+        plotdir = "QC/RNA/Merged/Annotation/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
         celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
@@ -259,13 +259,13 @@ rule PlottingAnnotationsManual:
 rule PlottingAnnotationsAutomatic:
     input:
         h5ad = "QC/RNA/Merged/merged.batch_corrected.h5ad",
-        manual_annotation = "QC/RNA/Merge/Annotation/merged_manual_annotation.json",
+        manual_annotation = "QC/RNA/Merged/Annotation/merged_manual_annotation.json",
     output:
-        h5ad = "QC/RNA/Merge/Annotation/merged.annotated.h5ad",
-        csv = "QC/RNA/Merge/Annotation/merged.CellTypeAnnotations.csv",
+        h5ad = "QC/RNA/Merged/Annotation/merged.annotated.h5ad",
+        csv = "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv",
     params:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
-        plotdir = "QC/RNA/merged/Plots",
+        plotdir = "QC/RNA/Merged/Annotation/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
         celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
@@ -290,13 +290,18 @@ rule PlottingAnnotationsAutomatic:
 
 rule TrajectoryAnalysis:
     input:
-        h5ad = "QC/RNA/Merge/Annotation/merged.annotated.h5ad",
+        h5ad = "QC/RNA/Merged/Annotation/merged.annotated.h5ad",
     output:
-        h5ad = "QC/RNA/Merge/Annotation/merged.diffusion.h5ad",
+        h5ad = "QC/RNA/Merged/TrajectoryAnalysis/merged.diffusion.h5ad",
     params:
         script = f"{workflow.basedir}/scripts/QC/TrajectoryAnalysis.py",
-        plotdir = "QC/RNA/Merge/TrajectoryAnalysis/Plots",
+        plotdir = "QC/RNA/Merged/TrajectoryAnalysis/Plots",
         diffusion_component = config['QC_RNA']['TrajectoryAnalysis']['diffusion_component'],
+        root_ctype = config['QC_RNA']['TrajectoryAnalysis']['root_ctype'],
+        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        celltype_mask = config['QC_RNA']['TrajectoryAnalysis']['celltype_mask'],
+        quantile = config['QC_RNA']['TrajectoryAnalysis']['quantile'],
+        cat_order = config['QC_RNA']['TrajectoryAnalysis']['cat_order'],
     conda:
         "../envs/scverse.yaml"
     log:
@@ -309,5 +314,10 @@ rule TrajectoryAnalysis:
         --input {input.h5ad} \
         --output {output.h5ad} \
         --diffusion_component {params.diffusion_component} \
+        --root_ctype "{params.root_ctype}" \
+        --celltype_key {params.celltype_key} \
+        --celltype_mask {params.celltype_mask} \
+        --quantile {params.quantile} \
+        --cat_order {params.cat_order} \
         --plotdir {params.plotdir}
         """   

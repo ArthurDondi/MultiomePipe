@@ -39,7 +39,13 @@ def prepare_trajectory_analysis(adata,celltype_key):
                   color=celltype_key,
                   components=[2, 3],
                   show=False,
-                  save=f"_diffusionmap_merge.png")
+                  save=f"_diffusionmap2-3_merge.png")
+    sc.pl.scatter(adata,
+                  basis="diffmap",
+                  color=celltype_key,
+                  components=[1, 2],
+                  show=False,
+                  save=f"_diffusionmap1-2_merge.png")
     return adata
 
 def write_data(adata,annotation_csv,output_file):

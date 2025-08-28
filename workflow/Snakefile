@@ -10,8 +10,8 @@ workdir: config['User']['output_dir']
 rule MultiomePipe_output:
     input:
         # QC RNA
-        "QC/RNA/Merge/Annotation/merged.diffusion.h5ad",
-        "QC/RNA/Merge/Annotation/merged.CellTypeAnnotations.csv",
+        "QC/RNA/Merged/TrajectoryAnalysis/merged.diffusion.h5ad",
+        "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv",
         # QC ATAC
         expand("QC/ATAC/{sample}.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
     default_target: True
