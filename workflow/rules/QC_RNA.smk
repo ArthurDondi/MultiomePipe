@@ -300,8 +300,10 @@ rule TrajectoryAnalysis:
         root_ctype = config['QC_RNA']['TrajectoryAnalysis']['root_ctype'],
         celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
         celltype_mask = config['QC_RNA']['TrajectoryAnalysis']['celltype_mask'],
-        quantile = config['QC_RNA']['TrajectoryAnalysis']['quantile'],
+        n_genes = config['QC_RNA']['TrajectoryAnalysis']['n_genes'],
+        clustering_distance = config['QC_RNA']['TrajectoryAnalysis']['clustering_distance'],
         cat_order = config['QC_RNA']['TrajectoryAnalysis']['cat_order'],
+        branching = config['QC_RNA']['TrajectoryAnalysis']['branching'],
     conda:
         "../envs/scverse.yaml"
     log:
@@ -317,7 +319,9 @@ rule TrajectoryAnalysis:
         --root_ctype "{params.root_ctype}" \
         --celltype_key {params.celltype_key} \
         --celltype_mask {params.celltype_mask} \
-        --quantile {params.quantile} \
+        --n_genes {params.n_genes} \
+        --clustering_distance {params.clustering_distance} \
         --cat_order {params.cat_order} \
-        --plotdir {params.plotdir}
+        --plotdir {params.plotdir} \
+        --branching {params.branching}
         """   

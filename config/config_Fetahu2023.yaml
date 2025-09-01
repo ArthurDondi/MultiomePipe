@@ -55,7 +55,7 @@ QC_RNA:
   PlottingAnnotations:
     doublets: "Doublets Undefined" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
     celltype_key: "cell_type"
-    leiden_res: "leiden_res_1.00"
+    leiden_res: "leiden_res_0.50"
 
   MergeSamplesAnnData:
     sample_key: "sample"
@@ -64,6 +64,8 @@ QC_RNA:
   TrajectoryAnalysis:
     diffusion_component: 1
     root_ctype: "Hematopoietic precursor cell"
-    celltype_mask: "'Neuroblastoma cell' 'Undefined' 'Erythroid lineage cell'" 
-    quantile: 0.99
-    cat_order: "'Hematopoietic precursor cell' 'T cell' 'NK cell' 'Myeloid cell' 'Plasmacytoid dendritic cell' 'B cell'"
+    celltype_mask: "'Neuroblastoma cell' 'Undefined' 'Other' 'Erythroid lineage cell' 'T cell' 'NK cell'  'Myeloid cell' 'Plasmacytoid dendritic cell'" 
+    n_genes: 20
+    clustering_distance: 1
+    cat_order: "'Hematopoietic precursor cell' 'Erythroid lineage cell' 'T cell' 'NK cell'  'Myeloid cell' 'Plasmacytoid dendritic cell' 'B cell'"
+    branching: 0

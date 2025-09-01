@@ -111,7 +111,10 @@ def main():
 
     print("2. Batch correction (Harmony)")
     start = timeit.default_timer()
-    sce.pp.harmony_integrate(adata, key=[donor_key,sample_key])
+    sce.pp.harmony_integrate(adata, 
+                             key=[donor_key,sample_key],
+                            theta=3.0,           # default ~2; smaller = weaker integration
+                            sigma=0.1)
     stop = timeit.default_timer()
     print(f"Batches corrected in {round(stop-start,2)}s")
 
