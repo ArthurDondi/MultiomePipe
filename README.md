@@ -1,4 +1,7 @@
-MultiomePipe is a Snakemake pipeline to pre-process 10X Multiome data after running Cellranger ARC. Alternatively, it also works with GEX-only data.
+MultiomePipe is a Snakemake workflow using scverse (scanpy) to pre-process 10X Multiome data after running Cellranger ARC. Alternatively, it also works with GEX-only data.
+
+This workflow was inspired by the [nf-core workflow scdownstream](https://github.com/nf-core/scdownstream),  the [single-cell best practices book](https://github.com/theislab/single-cell-best-practices), and scanpy [tutorials](https://scanpy.readthedocs.io/en/stable/tutorials/basics/clustering.html).
+
 
 # Install
 ```
@@ -8,7 +11,7 @@ git clone https://github.com/ArthurDondi/MultiomePipe.git
 cd MultiomePipe/
 ```
 
-# Example `config/config_Fetahu2023`
+# Example with GEX only `config/config_Fetahu2023`
 ## Prepare
 
 In `config/config_Fetahu2023`, change the `User` fields to paths to your desired input and output folders. 
