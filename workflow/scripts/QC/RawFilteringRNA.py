@@ -90,7 +90,7 @@ def run_raw_filtering(adata, min_genes, min_cells, n_mads, sample):
 
 def identify_doublets(adata, doublet_threshold, sample):
     total_cells = adata.n_obs
-    sc.pp.scrublet(adata, doublet_threshold)
+    sc.pp.scrublet(adata, threshold = doublet_threshold)
     
     n_predicted_doublets = adata.obs['predicted_doublet'].sum()
     

@@ -29,6 +29,7 @@ samples:
     donor: "M4"
     weblink: "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSM6659423&format=file&file=GSM6659423%5FM4%5Fraw%5Ffeature%5Fbc%5Fmatrix%2Eh5"
 
+IS_10X_REPO: False
 IS_FILTERED: False
 IS_ANNOTATED: False
 IS_BATCHED: False

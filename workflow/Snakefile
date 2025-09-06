@@ -2,7 +2,7 @@
 include: 'rules/common.smk'
 include: 'rules/GetData.smk'
 include: 'rules/QC_RNA.smk'
-#include: 'rules/QC_ATAC.smk'
+include: 'rules/QC_ATAC.smk'
 
 # Define results working directory
 workdir: config['User']['output_dir']
@@ -10,9 +10,12 @@ workdir: config['User']['output_dir']
 rule MultiomePipe_output:
     input:
         # QC RNA
-        "QC/RNA/Merged/TrajectoryAnalysis/merged.diffusion.h5ad",
-        "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv",
+        "QC/RNA/Merged/Annotation/merged.annotated.h5ad" if QC_RNA else [],
+        "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv" if QC_RNA else [],
+        # Trajectory Analysis 
+        "QC/RNA/Merged/TrajectoryAnalysis/merged.diffusion.h5ad" if TRAJ else [],
         # QC ATAC
-        expand("QC/ATAC/{sample}.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
+        expand("QC/ATAC/{sample}/QC/{sample}.barcodes_passing_qc.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
+        #expand("QC/ATAC/{sample}/bw_paths.tsv", sample=SAMPLES.keys()) if QC_ATAC else [],
     default_target: True
     localrule: True

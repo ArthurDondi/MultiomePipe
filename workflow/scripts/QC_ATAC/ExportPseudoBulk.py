@@ -11,11 +11,11 @@ import os
 import pandas as pd
 from pycisTopic.pseudobulk_peak_calling import export_pseudobulk
 
-def load_chromsizes(path=None):
+def load_chromsizes(genome, path=None):
     if path:
         chromsizes = pd.read_table(path, header=None, names=["Chromosome", "End"])
     else:
-        url = "http://hgdownload.cse.ucsc.edu/goldenPath/hg38/bigZips/hg38.chrom.sizes"
+        url = f"http://hgdownload.cse.ucsc.edu/goldenPath/{genome}/bigZips/{genome}.chrom.sizes"
         chromsizes = pd.read_table(url, header=None, names=["Chromosome", "End"])
     chromsizes.insert(1, "Start", 0)
     return chromsizes
@@ -25,13 +25,14 @@ def main():
     p.add_argument("--fragments", required=True, help="path to fragments.tsv.gz for this sample")
     p.add_argument("--cell_data", required=True, help="cell_data.tsv (index is barcode)")
     p.add_argument("--sample", required=True)
+    p.add_argument("--genome", type=str, default='hg38', required=False)
     p.add_argument("--outdir", required=True, help="output dir (per sample)")
-    p.add_argument("--variable", default="VSN_cell_type", help="column in cell_data with cell type labels")
-    p.add_argument("--sample_id_col", default="VSN_sample_id", help="sample id column in cell_data")
+    p.add_argument("--celltype_key", default="VSN_cell_type", help="column in cell_data with cell type labels")
+    p.add_argument("--sample_key", default="VSN_sample_id", help="sample id column in cell_data")
     p.add_argument("--n_cpu", type=int, default=4)
     p.add_argument("--normalize_bigwig", action="store_true")
-    p.add_argument("--split_pattern", default="-")
-    p.add_argument("--chromsizes", default=None, help="optional chromsizes file (3rd party). If not provided, downloads hg38 chromsizes.")
+    p.add_argument("--split_pattern", default="-", required=False)
+    p.add_argument("--chromsizes", default=None, help="optional chromsizes file (3rd party). If not provided, downloads args.genome chromsizes.")
     args = p.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -41,18 +42,19 @@ def main():
     os.makedirs(bw_path, exist_ok=True)
 
     # read cell metadata
-    cell_data = pd.read_table(args.cell_data, index_col=0)
+    cell_data = pd.read_csv(args.cell_data, index_col=0)
+    cell_data = cell_data[cell_data[args.sample_key]==args.sample]
 
     # fragments mapping - pycisTopic expects a dict of sample->path
     fragments_dict = { args.sample: args.fragments }
 
-    chromsizes = load_chromsizes(args.chromsizes)
+    chromsizes = load_chromsizes(args.genome, args.chromsizes)
 
     # call export_pseudobulk (this mirrors the code in the notebook)
     bw_paths, bed_paths = export_pseudobulk(
         input_data = cell_data,
-        variable = args.variable,
-        sample_id_col = args.sample_id_col,
+        variable = args.celltype_key,
+        sample_id_col = args.sample_key,
         chromsizes = chromsizes,
         bed_path = bed_path,
         bigwig_path = bw_path,

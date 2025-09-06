@@ -1,0 +1,107 @@
+# MultiomePipe config yaml file
+
+# Change those values to yours
+User:
+  input_dir: /home/dondia/run_MultiomePipe/input_pbmc_unsorted_3k
+  output_dir: /home/dondia/run_MultiomePipe/output_pbmc_unsorted_3k
+  
+  
+# Change any of those to True if you want to run it, else False
+Run:
+  # QC the GEX data
+  QC_RNA: True
+  # Trajectory analysis:
+  TRAJ: False
+  # QC the ATAC data
+  QC_ATAC: True
+
+samples:
+  pbmc_unsorted_3k:
+    donor: "Healthy_female_25yo"
+    weblink: "https://cf.10xgenomics.com/samples/cell-arc/2.0.0/pbmc_unsorted_3k/pbmc_unsorted_3k"
+
+IS_10X_REPO: True # If true, assumes data is organized like in a 10X data repository. If false, you need to provide full link to each file
+IS_FILTERED: False
+IS_ANNOTATED: False
+IS_BATCHED: False
+
+General:
+  genome: "hg38"
+  celltype_key: "cell_type"
+  sample_key: "sample"
+  donor_key: "donor"
+
+QC_RNA:
+  raw_data: True
+
+  CellbenderRemoveBackgroundRNA:
+    n_splits: 10
+    cuda: '' # change to '--cuda' if CUDA is installed and working
+    epochs: 150
+    expected-cells: 500
+    checkpoint_mins: 30
+    projected_ambient_count_threshold: 0.05
+    empty_drop_training_fraction: 0.05
+
+  RawFilteringRNA:
+    min_genes: 200
+    min_cells: 5
+    n_mads: 5
+    doublet_threshold: .25
+    n_top_genes: 2000
+
+  PlottingAnnotations:
+    doublets: "Doublets Undefined" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
+    leiden_res: "leiden_res_0.50"
+
+  TrajectoryAnalysis:
+    diffusion_component: 1
+    root_ctype: "Hematopoietic precursor cell"
+    celltype_mask: "'Neuroblastoma cell' 'Undefined' 'Other' 'Erythroid lineage cell' 'T cell' 'NK cell'  'Myeloid cell' 'Plasmacytoid dendritic cell'" 
+    n_genes: 20
+    clustering_distance: 1
+    cat_order: "'Hematopoietic precursor cell' 'Erythroid lineage cell' 'T cell' 'NK cell'  'Myeloid cell' 'Plasmacytoid dendritic cell' 'B cell'"
+    branching: 0
+
+### QC ATAC
+QC_ATAC:
+  ExportPseudobulk:
+    variable: "VSN_cell_type"
+    sample_id_col: "VSN_sample_id"
+    n_cpu: 1
+    normalize_bigwig: ""         # use "" if False, "--normalize_bigwig" if True
+    split_pattern: "-"
+    chromsizes: null 
+
+  MACS2CallPeaks:
+    format: "BEDPE"
+    gsize: "hs"
+    qvalue: 0.05
+    shift: 73
+    extsize: 146
+    keep_dup: "all"
+    call_summits: "--call-summits"
+    nolambda: "--nolambda"
+
+  GetConsensusPeaks:
+    path_to_blacklist: /home/dondia/scenicplus/pycisTopic/blacklist/hg38-blacklist.v2.bed
+
+  DownloadTSS:
+    tss_dataset: "hsapiens_gene_ensembl"
+    tss_host: "http://www.ensembl.org"
+
+  ComputeQC:
+    threads: 1
+    min_fragments_per_cb: 100
+    dont-collapse_duplicates: "" # --dont-collapse_duplicates to keep duplicate fragments (same chromosomal positions and linked to the same cell barcode), "" if false
+    # TSS profile statistics calculation settings:
+    tss_flank_window: 2000
+    tss_smoothing_rolling_window: 10
+    tss_minimum_signal_window: 100
+    tss_window: 50
+    tss_min_norm: 0.2
+
+  ApplyQC:
+    unique_fragments_threshold: null         # null (None) to use automatic thresholding, int otherwise (1000?)
+    tss_enrichment_threshold: null           # null (None) to use automatic thresholding, int/float otherwise (10?)
+    frip_threshold: 0

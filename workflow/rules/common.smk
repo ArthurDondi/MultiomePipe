@@ -3,13 +3,16 @@ import pandas as pd
 # Run
 QC_RNA=config['Run']['QC_RNA']
 QC_ATAC=config['Run']['QC_ATAC']
+TRAJ = config['Run']['TRAJ']
 
 INPUT = config['User']['input_dir']
 SAMPLES = config["samples"]
 
+IS_10X_REPO = config['IS_10X_REPO']
 IS_FILTERED = config['IS_FILTERED']
 IS_ANNOTATED = config['IS_ANNOTATED']
 IS_BATCHED = config['IS_BATCHED']
+
 
 SPLITS = range(1,config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']+1)
 

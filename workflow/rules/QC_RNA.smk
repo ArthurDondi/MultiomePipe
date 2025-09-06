@@ -139,8 +139,8 @@ rule MergeSamplesAnnData:
         script = f"{workflow.basedir}/scripts/QC/MergeSamplesAnnData.py",
         plotdir = "QC/RNA/Merged/MergeSamplesAnnData/Plots",
         samples = " ".join(SAMPLES.keys()),
-        donor_key = config['QC_RNA']['MergeSamplesAnnData']['donor_key'],
-        sample_key = config['QC_RNA']['MergeSamplesAnnData']['sample_key'],
+        donor_key = config['General']['donor_key'],
+        sample_key = config['General']['sample_key'],
         is_filtered = "--is_filtered" if IS_FILTERED else ""
     conda:
         "../envs/scverse.yaml"
@@ -169,9 +169,9 @@ rule BatchCorrection:
     params:
         script = f"{workflow.basedir}/scripts/QC/BatchCorrection.py",
         plotdir = "QC/RNA/Merged/BatchCorrection/Plots",
-        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
-        donor_key = config['QC_RNA']['MergeSamplesAnnData']['donor_key'],
-        sample_key = config['QC_RNA']['MergeSamplesAnnData']['sample_key'],
+        celltype_key = config['General']['celltype_key'],
+        donor_key = config['General']['donor_key'],
+        sample_key = config['General']['sample_key'],
         is_filtered = "--is_filtered" if IS_FILTERED else ""
     conda:
         "../envs/scverse.yaml"
@@ -234,7 +234,7 @@ rule PlottingAnnotationsManual:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
         plotdir = "QC/RNA/Merged/Annotation/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
-        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        celltype_key = config['General']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
     conda:
         "../envs/scverse.yaml"
@@ -267,7 +267,7 @@ rule PlottingAnnotationsAutomatic:
         script = f"{workflow.basedir}/scripts/QC/PlottingAnnotations.py",
         plotdir = "QC/RNA/Merged/Annotation/Plots",
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
-        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        celltype_key = config['General']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
     conda:
         "../envs/scverse.yaml"
@@ -298,7 +298,7 @@ rule TrajectoryAnalysis:
         plotdir = "QC/RNA/Merged/TrajectoryAnalysis/Plots",
         diffusion_component = config['QC_RNA']['TrajectoryAnalysis']['diffusion_component'],
         root_ctype = config['QC_RNA']['TrajectoryAnalysis']['root_ctype'],
-        celltype_key = config['QC_RNA']['PlottingAnnotations']['celltype_key'],
+        celltype_key = config['General']['celltype_key'],
         celltype_mask = config['QC_RNA']['TrajectoryAnalysis']['celltype_mask'],
         n_genes = config['QC_RNA']['TrajectoryAnalysis']['n_genes'],
         clustering_distance = config['QC_RNA']['TrajectoryAnalysis']['clustering_distance'],

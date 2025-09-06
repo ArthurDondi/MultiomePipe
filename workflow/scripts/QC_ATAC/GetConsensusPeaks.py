@@ -13,11 +13,11 @@ import pandas as pd
 import pyranges as pr
 from pycisTopic.iterative_peak_calling import get_consensus_peaks
 
-def load_chromsizes(path=None):
+def load_chromsizes(genome, path=None):
     if path:
         cs = pd.read_table(path, header=None, names=["Chromosome", "End"])
     else:
-        url = "http://hgdownload.cse.ucsc.edu/goldenPath/hg38/bigZips/hg38.chrom.sizes"
+        url = f"http://hgdownload.cse.ucsc.edu/goldenPath/{genome}/bigZips/{genome}.chrom.sizes"
         cs = pd.read_table(url, header=None, names=["Chromosome", "End"])
     cs.insert(1, "Start", 0)
     return cs
@@ -26,9 +26,19 @@ def narrowpeak_to_pyranges(path):
     df = pd.read_table(path, header=None)
     # ensure we have column names; narrowPeak spec up to 10 columns
     ncols = df.shape[1]
-    base_cols = ["Chromosome", "Start", "End"]
-    other_cols = [f"col{i}" for i in range(4, ncols+1)]
-    df.columns = base_cols + other_cols[:max(0, ncols-3)]
+    cols = [
+            "Chromosome",
+            "Start",
+            "End",
+            "Name",
+            "Score",
+            "Strand",
+            "FC_summit",
+            "-log10_pval",
+            "-log10_qval",
+            "Summit",
+        ]
+    df.columns = cols
     # convert to PyRanges
     pr_obj = pr.PyRanges(df)
     return pr_obj, df
@@ -50,6 +60,7 @@ def main():
     p.add_argument("--output", required=True)
     p.add_argument("--sample", required=False, help="optional sample prefix to strip from filenames when naming celltypes")
     p.add_argument("--peak_half_width", type=int, default=250)
+    p.add_argument("--genome", type=str, default="hg38")
     p.add_argument("--chromsizes", default=None)
     p.add_argument("--path_to_blacklist", default=None)
     args = p.parse_args()
@@ -62,7 +73,7 @@ def main():
         name = derive_name_from_filename(f, sample_name=args.sample)
         narrow_peaks_dict[name] = pr_obj
 
-    chromsizes = load_chromsizes(args.chromsizes)
+    chromsizes = load_chromsizes(args.genome, args.chromsizes)
 
     consensus = get_consensus_peaks(
         narrow_peaks_dict,

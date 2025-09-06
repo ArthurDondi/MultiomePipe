@@ -35,8 +35,9 @@ def prepare_annotation(adata,markers_file):
 
 def clustering(adata,sample_key,donor_key,is_filtered):
 
-    sc.pp.neighbors(adata, use_rep='X_pca_harmony')
-    sc.tl.umap(adata)
+    if "X_pca_harmony" in adata.obsm:
+        sc.pp.neighbors(adata, use_rep='X_pca_harmony')
+        sc.tl.umap(adata)
 
     for res in [0.2, 0.5, 1]:
         sc.tl.leiden(adata, key_added=f"leiden_res_{res:4.2f}", resolution=res)
@@ -111,10 +112,11 @@ def main():
 
     print("2. Batch correction (Harmony)")
     start = timeit.default_timer()
-    sce.pp.harmony_integrate(adata, 
-                             key=[donor_key,sample_key],
-                            theta=3.0,           # default ~2; smaller = weaker integration
-                            sigma=0.1)
+    if (len(adata.obs[donor_key].unique()) > 1) | (len(adata.obs[sample_key].unique()) > 1):
+        sce.pp.harmony_integrate(adata, 
+                                key=[donor_key,sample_key],
+                                theta=3.0,           # default ~2; smaller = weaker integration
+                                sigma=0.1)
     stop = timeit.default_timer()
     print(f"Batches corrected in {round(stop-start,2)}s")
 

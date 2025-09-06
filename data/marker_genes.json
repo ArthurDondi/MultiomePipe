@@ -1,0 +1,11 @@
+{
+  "": ["PTPRC", "CD52"],
+  "T cell": ["CD2", "CD3D", "CD3E", "CD3G", "CD7", "IL7R", "CCR7"],
+  "NK cell": ["GNLY", "NKG7"],
+  "B cell": ["CD79A", "CD79B", "CD19"],
+  "Myeloid cell": ["CD68", "AIF1", "CSF1R", "TYROBP", "FCER1G", "CD14", "LYZ", "FCGR3A", "MS4A7"],
+  "plasmacytoid dendritic cell": ["IL3RA", "CLEC4C", "NRP1"],
+  "Erythroid lineage cell": ["TFRC", "GYPA", "CD36"],
+  "Hematopoietic precursor cell": ["CD34", "FCGR2A"],
+  "Neuroblastoma cell": ["PHOX2B", "PHOX2A", "TH", "SYP", "CHGA", "CHGB", "DBH", "GATA2", "MYCN", "L1CAM", "B4GALNT1", "NCAM1"]
+}
