@@ -82,10 +82,7 @@ def _get_macs_outputs(wildcards):
                     sample = wildcards.sample,
                     celltype=CTYPES)
 
-###############################################################################
-# 2) MACS2 per sample × celltype (expanded from the consensus rule below)
-###############################################################################
-rule MACS2CallPeaks:
+rule MACS3CallPeaks:
     input:
         fragments = "QC/ATAC/{sample}/PseudoBulk/pseudobulk_bed_files/{celltype}.fragments.tsv.gz"
     output:
@@ -102,9 +99,9 @@ rule MACS2CallPeaks:
         nolambda = config["QC_ATAC"]["MACS2CallPeaks"]["nolambda"]
     threads: 1
     log:
-        "logs/MACS2CallPeaks/{sample}_{celltype}.log"
+        "logs/MACS3CallPeaks/{sample}_{celltype}.log"
     benchmark:
-        "benchmark/MACS2CallPeaks/{sample}_{celltype}.benchmark.txt"
+        "benchmark/MACS3CallPeaks/{sample}_{celltype}.benchmark.txt"
     shell:
         r"""
         mkdir -p {params.outdir}
@@ -123,9 +120,6 @@ rule MACS2CallPeaks:
             {params.nolambda} 
         """
 
-###############################################################################
-# 3) Consensus peaks: wait for all MACS outputs, then run pycisTopic merging
-###############################################################################
 rule GetConsensusPeaks:
     input:
         narrowpeaks = lambda wildcards: _get_macs_outputs(wildcards)
@@ -134,7 +128,7 @@ rule GetConsensusPeaks:
     params:
         script = f"{workflow.basedir}/scripts/QC_ATAC/GetConsensusPeaks.py",
         genome = config['General']['genome'],
-        path_to_blacklist = config["QC_ATAC"]["GetConsensusPeaks"]["path_to_blacklist"]
+        path_to_blacklist = f"{workflow.basedir}/../data/hg38-blacklist.v2.bed",
     log:
         "logs/GetConsensusPeaks/{sample}.log"
     benchmark:
@@ -242,7 +236,7 @@ rule CreateATACCountMatrix:
         pkl = "QC/ATAC/{sample}/QC/{sample}.matrix.pkl"
     params:
         script = f"{workflow.basedir}/scripts/QC_ATAC/CreateATACCountMatrix.py",
-        blacklist = config["QC_ATAC"]["GetConsensusPeaks"]["path_to_blacklist"],
+        blacklist = f"{workflow.basedir}/../data/hg38-blacklist.v2.bed",
         split_pattern = config["QC_ATAC"]["ExportPseudobulk"]["split_pattern"],
         min_fragments_per_region = config["QC_ATAC"]['CreateATACCountMatrix']['min_fragments_per_region'],
         min_cells_per_region = config["QC_ATAC"]['CreateATACCountMatrix']['min_cells_per_region'],

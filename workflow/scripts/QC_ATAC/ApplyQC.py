@@ -16,6 +16,14 @@ python ApplyQC.py --outdir outs/qc_output \
     [--tss_enrichment_threshold 5] \
     [--frip_threshold 0.2]
 """
+
+import argparse
+from pycisTopic.plotting.qc_plot import plot_sample_stats, plot_barcode_stats
+from pycisTopic.qc import get_barcodes_passing_qc_for_sample
+import matplotlib
+matplotlib.use("Agg") 
+
+
 def none_or_float(x):
     if x in ("None", "none", ""):
         return None
@@ -27,9 +35,7 @@ def none_or_int(x):
         return None
     return int(x)
 
-import argparse
-from pycisTopic.plotting.qc_plot import plot_sample_stats, plot_barcode_stats
-from pycisTopic.qc import get_barcodes_passing_qc_for_sample
+
 
 def main():
     p = argparse.ArgumentParser()

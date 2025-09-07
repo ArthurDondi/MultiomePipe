@@ -83,9 +83,6 @@ QC_ATAC:
     call_summits: "--call-summits"
     nolambda: "--nolambda"
 
-  GetConsensusPeaks:
-    path_to_blacklist: /home/dondia/scenicplus/pycisTopic/blacklist/hg38-blacklist.v2.bed
-
   DownloadTSS:
     tss_dataset: "hsapiens_gene_ensembl"
     tss_host: "http://www.ensembl.org"

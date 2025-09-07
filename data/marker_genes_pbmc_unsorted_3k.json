@@ -1,0 +1,52 @@
+{
+  "Leukocyte": [
+    "PTPRC",
+    "CD52"
+  ],
+  "T cell": [
+    "CD2",
+    "CD3D",
+    "CD3E",
+    "CD3G",
+    "CD7",
+    "IL7R",
+    "CCR7"
+  ],
+  "B cell": [
+    "CD19",
+    "CD79A",
+    "MS4A1"
+  ],
+  "NK cell": [
+    "NCAM1",
+    "NKG7",
+    "KLRD1",
+    "GNLY"
+  ],
+  "Dendritic cell": [
+    "ITGAX",
+    "CD1C",
+    "CLEC9A"
+  ],
+  "Myeloid cell": [
+    "CD68",
+    "AIF1",
+    "CSF1R",
+    "TYROBP",
+    "FCER1G",
+    "CD14",
+    "LYZ",
+    "FCGR3A",
+    "MS4A7"
+  ],
+  "Plasmacytoid dendritic cell": [
+    "IL3RA",
+    "CLEC4C",
+    "NRP1"
+  ],
+  "Erythroid lineage cell": [
+    "TFRC",
+    "GYPA",
+    "CD36"
+  ]
+}
