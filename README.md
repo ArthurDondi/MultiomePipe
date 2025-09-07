@@ -6,6 +6,8 @@ A Snakemake workflow to analyze 10X Multiome data
 
 MultiomePipe is designed to process 10X Multiome ATAC + Gene Expression data after running Cellranger ARC. It also works with RNA-only or ATAC-only data (without integration).
 
+The workflow has only been tested on human data and will require changes for other species.
+
 ### RNA-seq
 MultiomePipe uses [Scanpy](https://scanpy.readthedocs.io/en/stable/index.html) to process, cluster, and annotate RNA-seq data. It was inspired by the [nf-core workflow scdownstream](https://github.com/nf-core/scdownstream),  the [single-cell best practices book](https://github.com/theislab/single-cell-best-practices), and [scanpy tutorials](https://scanpy.readthedocs.io/en/stable/tutorials/basics/clustering.html).
 
