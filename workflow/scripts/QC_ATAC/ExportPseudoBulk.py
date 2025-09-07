@@ -28,7 +28,7 @@ def main():
     p.add_argument("--genome", type=str, default='hg38', required=False)
     p.add_argument("--outdir", required=True, help="output dir (per sample)")
     p.add_argument("--celltype_key", default="VSN_cell_type", help="column in cell_data with cell type labels")
-    p.add_argument("--sample_key", default="VSN_sample_id", help="sample id column in cell_data")
+    p.add_argument("--sample_key", default="sample", help="sample id column in cell_data")
     p.add_argument("--n_cpu", type=int, default=4)
     p.add_argument("--normalize_bigwig", action="store_true")
     p.add_argument("--split_pattern", default="-", required=False)

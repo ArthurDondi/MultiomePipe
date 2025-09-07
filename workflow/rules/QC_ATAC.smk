@@ -8,17 +8,20 @@ SUBSAMPLE = True
 rule Subsample:
     input:
         fragments = f"{INPUT}/ATAC/{{sample}}.atac_fragments.tsv.gz",
+        cell_data = "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv"
     output:
         subsampled = f"{INPUT}/ATAC/{{sample}}.atac_fragments.subsample.tsv.gz",
         tbi = f"{INPUT}/ATAC/{{sample}}.atac_fragments.subsample.tsv.gz.tbi",
     params:
         script = f"{workflow.basedir}/scripts/QC_ATAC/Subsample.py",
-        fraction = 0.1,
+        fraction = 0.5,
     shell:
         r"""
         python {params.script} \
             --input {input.fragments} \
             --output {output.subsampled} \
+            --cell_data {input.cell_data} \
+            --sample {wildcards.sample} \
             --fraction {params.fraction}
         """
 
@@ -171,7 +174,7 @@ rule ComputeQC:
         consensus = "QC/ATAC/{sample}/ConsensusPeaks/{sample}_consensus_peaks.bed",
         tss_annotation = "QC/ATAC/TSS/tss_annotation.bed",
     output:
-        parquet = "QC/ATAC/{sample}/QC/{sample}.fragments_insert_size_dist.parquet",
+        parquet = "QC/ATAC/{sample}/QC/{sample}.fragments_stats_per_cb.parquet",
     params:
         out_prefix = lambda wildcards: f"QC/ATAC/{wildcards.sample}/QC/{wildcards.sample}",
         min_fragments_per_cb = config["QC_ATAC"]['ComputeQC']['min_fragments_per_cb'],
@@ -204,7 +207,7 @@ rule ComputeQC:
 
 rule ApplyQC:
     input:
-        parquet = "QC/ATAC/{sample}/QC/{sample}.fragments_insert_size_dist.parquet",
+        parquet = "QC/ATAC/{sample}/QC/{sample}.fragments_stats_per_cb.parquet",
     output:
         barcodes = "QC/ATAC/{sample}/QC/{sample}.barcodes_passing_qc.tsv",
         png ="QC/ATAC/{sample}/QC/Plots/sample_statistics.png"
@@ -214,6 +217,10 @@ rule ApplyQC:
         unique_fragments_threshold = config["QC_ATAC"]["ApplyQC"]['unique_fragments_threshold'],
         tss_enrichment_threshold = config["QC_ATAC"]["ApplyQC"]['tss_enrichment_threshold'],
         frip_threshold = config["QC_ATAC"]["ApplyQC"]['frip_threshold'],
+    log:
+        "logs/ApplyQC/{sample}.log"
+    benchmark:
+        "benchmark/ApplyQC/{sample}.benchmark.txt"
     shell:
         r"""
         python {params.script} \
@@ -225,3 +232,99 @@ rule ApplyQC:
             --frip_threshold {params.frip_threshold}
         """
 
+rule CreateATACCountMatrix:
+    input:
+        barcodes = "QC/ATAC/{sample}/QC/{sample}.barcodes_passing_qc.tsv",
+        fragments = f"{INPUT}/ATAC/{{sample}}.atac_fragments.subsample.tsv.gz" if SUBSAMPLE else f"{INPUT}/ATAC/{{sample}}.atac_fragments.tsv.gz",
+        consensus = "QC/ATAC/{sample}/ConsensusPeaks/{sample}_consensus_peaks.bed",
+        parquet = "QC/ATAC/{sample}/QC/{sample}.fragments_stats_per_cb.parquet",
+    output:
+        pkl = "QC/ATAC/{sample}/QC/{sample}.matrix.pkl"
+    params:
+        script = f"{workflow.basedir}/scripts/QC_ATAC/CreateATACCountMatrix.py",
+        blacklist = config["QC_ATAC"]["GetConsensusPeaks"]["path_to_blacklist"],
+        split_pattern = config["QC_ATAC"]["ExportPseudobulk"]["split_pattern"],
+        min_fragments_per_region = config["QC_ATAC"]['CreateATACCountMatrix']['min_fragments_per_region'],
+        min_cells_per_region = config["QC_ATAC"]['CreateATACCountMatrix']['min_cells_per_region'],
+    threads: config["QC_ATAC"]['CreateATACCountMatrix']['threads']
+    log:
+        "logs/CreateATACCountMatrix/{sample}.log"
+    benchmark:
+        "benchmark/CreateATACCountMatrix/{sample}.benchmark.txt"
+    shell:
+        r"""
+        python {params.script} \
+            --sample {wildcards.sample} \
+            --barcodes {input.barcodes} \
+            --fragments {input.fragments} \
+            --regions {input.consensus} \
+            --out_cistopic_obj {output.pkl} \
+            --blacklist {params.blacklist} \
+            --parquet {input.parquet} \
+            --split_pattern {params.split_pattern} \
+            --min_fragments_per_region {params.min_fragments_per_region} \
+            --min_cells_per_region {params.min_cells_per_region} \
+            --n_cpu {threads} 
+        """
+
+rule RunLDAModels:
+    input:
+        pkl = "QC/ATAC/{sample}/QC/{sample}.matrix.pkl"
+    output:
+        pkl = "QC/ATAC/{sample}/LDAModels/{sample}.models.pkl",
+        png = "QC/ATAC/{sample}/LDAModels/Plots/model_evaluation.png"
+    params:
+        script = f"{workflow.basedir}/scripts/QC_ATAC/RunLDAModels.py",
+        outdir = lambda wildcards: f"QC/ATAC/{wildcards.sample}/LDAModels",
+        n_topics = config["QC_ATAC"]['RunLDAModels']['n_topics'],
+        n_iter = config["QC_ATAC"]['RunLDAModels']['n_iter'],
+        random_state = config["QC_ATAC"]['RunLDAModels']['random_state'],
+        alpha = config["QC_ATAC"]['RunLDAModels']['alpha'],
+        alpha_by_topic = config["QC_ATAC"]['RunLDAModels']['alpha_by_topic'],
+        eta = config["QC_ATAC"]['RunLDAModels']['eta'],
+        eta_by_topic = config["QC_ATAC"]['RunLDAModels']['eta_by_topic'],
+    threads: config["QC_ATAC"]['RunLDAModels']['n_cpus']
+    log:
+        "logs/RunLDAModels/{sample}.log"
+    benchmark:
+        "benchmark/RunLDAModels/{sample}.benchmark.txt"
+    shell:
+        r"""
+        python {params.script} \
+            --outdir {params.outdir} \
+            --in_cistopic_obj {input.pkl} \
+            --out_cistopic_obj {output.pkl} \
+            --n_cpu {threads} \
+            --n_topics {params.n_topics} \
+            --n_iter {params.n_iter} \
+            --random_state {params.random_state} \
+            --alpha {params.alpha} {params.alpha_by_topic} \
+            --eta {params.eta} {params.eta_by_topic} 
+        """
+
+rule Clustering:
+    input:
+        pkl = "QC/ATAC/{sample}/LDAModels/{sample}.models.pkl",
+        cell_data = "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv"
+    output:
+        pkl = "QC/ATAC/{sample}/Clustering/{sample}.clustering.pkl",
+        png = "QC/ATAC/{sample}/Clustering/Plots/heatmap.png"
+    params:
+        script = f"{workflow.basedir}/scripts/QC_ATAC/Clustering.py",
+        outdir = lambda wildcards: f"QC/ATAC/{wildcards.sample}/Clustering",
+        sample_key = config['General']["sample_key"],
+    log:
+        "logs/Clustering/{sample}.log"
+    benchmark:
+        "benchmark/Clustering/{sample}.benchmark.txt"
+    shell:
+        r"""
+        python {params.script} \
+            --outdir {params.outdir} \
+            --in_cistopic_obj {input.pkl} \
+            --out_cistopic_obj {output.pkl} \
+            --cell_data {input.cell_data} \
+            --sample {wildcards.sample} \
+            --sample_key {params.sample_key}
+        """
+    

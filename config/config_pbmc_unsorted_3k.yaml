@@ -105,3 +105,18 @@ QC_ATAC:
     unique_fragments_threshold: null         # null (None) to use automatic thresholding, int otherwise (1000?)
     tss_enrichment_threshold: null           # null (None) to use automatic thresholding, int/float otherwise (10?)
     frip_threshold: 0
+
+  CreateATACCountMatrix:
+    threads: 1
+    min_fragments_per_region: 10
+    min_cells_per_region: 10
+  
+  RunLDAModels:
+    n_cpus: 1
+    n_topics: "2 5 10 15 20 25 30 35 40 45 50"
+    n_iter: 500
+    random_state: 0
+    alpha: 50
+    alpha_by_topic: '--alpha_by_topic'
+    eta: 0.1
+    eta_by_topic: '--eta_by_topic'

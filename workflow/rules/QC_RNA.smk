@@ -156,8 +156,7 @@ rule MergeSamplesAnnData:
         --samples {params.samples} \
         --plotdir {params.plotdir} \
         --donor_key {params.donor_key} \
-        {params.is_filtered} \
-        --sample_key {params.sample_key}
+        --sample_key {params.sample_key} {params.is_filtered}
         """
 
 rule BatchCorrection:

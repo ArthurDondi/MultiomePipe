@@ -14,7 +14,8 @@ def merge_data(input_files, samples):
     #Adding sample name to cell names
     for adata,sample in zip(adatas,samples):
         adata.var_names_make_unique()
-        adata.obs_names = adata.obs_names+'_'+sample
+        adata.obs['barcodes'] = adata.obs_names
+        adata.obs_names = adata.obs_names+'-'+sample
     print("Concat")
     adata_concat = ad.concat(
         adatas,
