@@ -9,7 +9,7 @@ ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
 
 rule CellbenderRemoveBackgroundRNA:
     input:
-        h5 = f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
+        h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5" if IS_LOCAL else f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
     output:
         h5 = "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5",
         h5_filtered = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
@@ -46,7 +46,7 @@ rule CellbenderRemoveBackgroundRNA:
 
 rule CellbenderToH5ad:
     input:
-        cellbender_input = f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
+        cellbender_input = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5" if IS_LOCAL else f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
         cellbender_output = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
     output:
         merged = "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5ad",
