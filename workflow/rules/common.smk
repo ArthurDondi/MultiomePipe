@@ -9,6 +9,7 @@ INPUT = config['User']['input_dir']
 SAMPLES = config["samples"]
 
 IS_10X_REPO = config['IS_10X_REPO']
+IS_LOCAL = config.get('IS_LOCAL', False)
 IS_FILTERED = config['IS_FILTERED']
 IS_ANNOTATED = config['IS_ANNOTATED']
 IS_BATCHED = config['IS_BATCHED']

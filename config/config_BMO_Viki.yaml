@@ -1,0 +1,73 @@
+# MultiomePipe config yaml file
+
+# Change those values to yours
+User:
+  input_dir: /home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/projects/BMO_Viki/analysis/QC/scRNA/CellRangerCount/
+  output_dir: /scratch/research/taschnermandl/arthur_d/BMO_viki/
+  
+# Change any of those to True if you want to run it, else False
+Run:
+  # QC the GEX data
+  QC_RNA: True
+  # QC the ATAC data
+  QC_ATAC: False
+  TRAJ: False
+
+samples:
+  BMOalone:
+    donor: "BMOalone"
+  BMO-IMR-DOX:
+    donor: "BMO-IMR-DOX"
+  BMO-IMR-noDOX:
+    donor: "BMO-IMR-noDOX"
+  BMO-SKNBE2c:
+    donor: "BMO-SKNBE2c"
+  BMO-SKNSH:
+    donor: "BMO-SKNSH"
+  BMO-STANB12:
+    donor: "BMO-STANB12"
+  BMO-STANB8:
+    donor: "BMO-STANB8"
+
+IS_10X_REPO: False
+IS_LOCAL: True
+IS_FILTERED: False
+IS_ANNOTATED: False
+IS_BATCHED: False
+
+QC_RNA:
+  raw_data: True
+
+  CellbenderRemoveBackgroundRNA:
+    n_splits: 10
+    cuda: '--cuda' # change to '' if CUDA is not available
+    epochs: 150
+    expected-cells: 20000
+    checkpoint_mins: 30
+    projected_ambient_count_threshold: 0.05
+    empty_drop_training_fraction: 0.05
+
+  RawFilteringRNA:
+    min_genes: 200
+    min_cells: 5
+    n_mads: 5
+    doublet_threshold: .25
+    n_top_genes: 2000
+
+  PlottingAnnotations:
+    doublets: "Doublets Undefined" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
+    celltype_key: "cell_type"
+    leiden_res: "leiden_res_0.50"
+
+  MergeSamplesAnnData:
+    sample_key: "sample"
+    donor_key: "donor"
+
+  TrajectoryAnalysis:
+    diffusion_component: 1
+    root_ctype: "Hematopoietic precursor cell"
+    celltype_mask: "'Neuroblastoma cell' 'Undefined' 'Other' 'Erythroid lineage cell' 'T cell' 'NK cell'  'Myeloid cell' 'Plasmacytoid dendritic cell'" 
+    n_genes: 20
+    clustering_distance: 1
+    cat_order: "'Hematopoietic precursor cell' 'Erythroid lineage cell' 'T cell' 'NK cell'  'Myeloid cell' 'Plasmacytoid dendritic cell' 'B cell'"
+    branching: 0
