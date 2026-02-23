@@ -7,38 +7,12 @@ import json
 
 ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
 
-rule SplittingInput:
-    input:
-        f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
-    output:
-        expand("QC/RNA/{{sample}}/SplittingInput/split_{i}_{{sample}}.raw_feature_bc_matrix.h5", i=SPLITS),
-        pngout = "QC/RNA/{sample}/Plots/{sample}.ElbowPlot.png"
-    params:
-        script=f"{workflow.basedir}/scripts/QC/SplittingInput.py",
-        outdir=lambda wildcards: f"QC/RNA/{wildcards.sample}/SplittingInput/",
-        n_splits = config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']
-    conda:
-        "../envs/scverse.yaml"
-    log:
-        "logs/SplittingInput/{sample}.log"
-    benchmark:
-        "benchmark/SplittingInput/{sample}.benchmark.txt"
-    shell:
-        r"""
-        python -W ignore {params.script} \
-        --h5in {input} \
-        --pngout {output.pngout} \
-        --outdir {params.outdir} \
-        --sample {wildcards.sample} \
-        --n_splits {params.n_splits}
-        """    
-
 rule CellbenderRemoveBackgroundRNA:
     input:
-        h5 = "QC/RNA/{sample}/SplittingInput/split_{i}_{sample}.raw_feature_bc_matrix.h5"
+        h5 = f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
     output:
-        h5 = "QC/RNA/{sample}/Cellbender/split_{i}_{sample}_cellbender.h5",
-        h5_filtered = "QC/RNA/{sample}/Cellbender/split_{i}_{sample}_cellbender_filtered.h5",
+        h5 = "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5",
+        h5_filtered = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
     params:
         cuda=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['cuda'],
         epochs=config['QC_RNA']['CellbenderRemoveBackgroundRNA']['epochs'],
@@ -51,9 +25,9 @@ rule CellbenderRemoveBackgroundRNA:
     conda:
         "../envs/cellbender.yaml"
     log:
-        "logs/CellBenderRemoveBackgroundRNA/{sample}.{i}.log"
+        "logs/CellBenderRemoveBackgroundRNA/{sample}.log"
     benchmark:
-        "benchmark/CellBenderRemoveBackgroundRNA/{sample}.{i}.benchmark.txt"
+        "benchmark/CellBenderRemoveBackgroundRNA/{sample}.benchmark.txt"
     shell:
         r"""
         cellbender remove-background \
@@ -72,8 +46,8 @@ rule CellbenderRemoveBackgroundRNA:
 
 rule MergingCellbenderOutput:
     input:
-        cellbender_input = expand("QC/RNA/{{sample}}/SplittingInput/split_{i}_{{sample}}.raw_feature_bc_matrix.h5", i=SPLITS),
-        cellbender_output = expand("QC/RNA/{{sample}}/Cellbender/split_{i}_{{sample}}_cellbender_filtered.h5", i=SPLITS),
+        cellbender_input = f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
+        cellbender_output = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
     output:
         merged = "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
     params:
