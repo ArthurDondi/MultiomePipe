@@ -14,8 +14,6 @@ IS_ANNOTATED = config['IS_ANNOTATED']
 IS_BATCHED = config['IS_BATCHED']
 
 
-SPLITS = range(1,config['QC_RNA']['CellbenderRemoveBackgroundRNA']['n_splits']+1)
-
 def get_CTYPES(samples):
     CTYPES = {}
     for sample in samples:
