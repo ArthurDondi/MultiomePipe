@@ -1,34 +1,33 @@
 # Download raw or filtered data
 
-if not IS_LOCAL:
-    if IS_10X_REPO:
-        rule GetRawGEXData10X:
-            output:
-                f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
-            params:
-                url=lambda wildcards: SAMPLES[wildcards.sample]['weblink']
-            log:
-                "logs/GetRawData/{sample}.log"
-            benchmark:
-                "benchmark/GetRawData/{sample}.benchmark.txt"
-            shell:
-                r"""
-                wget -O {output} "{params.url}_raw_feature_bc_matrix.h5"
-                """
-    else:
-        rule GetRawGEXDataWeblink:
-            output:
-                f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
-            params:
-                url=lambda wildcards: SAMPLES[wildcards.sample]['weblink']
-            log:
-                "logs/GetRawData/{sample}.log"
-            benchmark:
-                "benchmark/GetRawData/{sample}.benchmark.txt"
-            shell:
-                r"""
-                wget -O {output} "{params.url}"
-                """
+if IS_10X_REPO:
+    rule GetRawGEXData10X:
+        output:
+            f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
+        params:
+            url=lambda wildcards: SAMPLES[wildcards.sample]['weblink']
+        log:
+            "logs/GetRawData/{sample}.log"
+        benchmark:
+            "benchmark/GetRawData/{sample}.benchmark.txt"
+        shell:
+            r"""
+            wget -O {output} "{params.url}_raw_feature_bc_matrix.h5"
+            """
+else:
+    rule GetRawGEXDataWeblink:
+        output:
+            f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
+        params:
+            url=lambda wildcards: SAMPLES[wildcards.sample]['weblink']
+        log:
+            "logs/GetRawData/{sample}.log"
+        benchmark:
+            "benchmark/GetRawData/{sample}.benchmark.txt"
+        shell:
+            r"""
+            wget -O {output} "{params.url}"
+            """
 
 rule GetRawMatrix:
     output:
