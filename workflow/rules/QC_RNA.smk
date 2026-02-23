@@ -44,21 +44,21 @@ rule CellbenderRemoveBackgroundRNA:
         rm ckpt.tar.gz 
         """
 
-rule MergingCellbenderOutput:
+rule CellbenderToH5ad:
     input:
         cellbender_input = f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
         cellbender_output = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
     output:
-        merged = "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
+        merged = "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5ad",
     params:
-        script = f"{workflow.basedir}/scripts/QC/MergingCellbenderOutput.py",
+        script = f"{workflow.basedir}/scripts/QC/CellbenderToH5ad.py",
         outdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Cellbender/"
     conda:
         "../envs/cellbender.yaml"
     log:
-        "logs/MergingCellbenderOutput/{sample}.log"
+        "logs/CellbenderToH5ad/{sample}.log"
     benchmark:
-        "benchmark/MergingCellbenderOutput/{sample}.benchmark.txt"
+        "benchmark/CellbenderToH5ad/{sample}.benchmark.txt"
     shell:
         r"""
         python -W ignore {params.script} \
@@ -69,7 +69,7 @@ rule MergingCellbenderOutput:
 
 rule RawFilteringRNA:
     input:
-        h5ad = lambda wildcards: f"{INPUT}/{{sample}}.h5ad" if IS_FILTERED else "QC/RNA/{sample}/Cellbender/merged_{sample}_cellbender.h5ad",
+        h5ad = lambda wildcards: f"{INPUT}/{{sample}}.h5ad" if IS_FILTERED else "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5ad",
     output:
         h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
     params:
