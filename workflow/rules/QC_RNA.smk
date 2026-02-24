@@ -22,6 +22,8 @@ rule CellbenderRemoveBackgroundRNA:
         expected_cells=lambda wildcards: config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'],
         total_droplets_included=lambda wildcards: 3 * config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'],
     threads: 1
+    resources:
+        nvidia_gpu=1
     conda:
         "../envs/cellbender.yaml"
     log:
