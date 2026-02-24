@@ -1,9 +1,8 @@
-name: 
-  /scratch/research/taschnermandl/arthur_d/BMO_viki/.snakemake/conda/ea8665c897f24cbaf48aefb267d5fd57_
+name: scverse
 channels:
+  - bioconda
   - defaults
   - conda-forge
-  - bioconda
 dependencies:
   - _libgcc_mutex=0.1=main
   - _openmp_mutex=5.1=1_gnu
@@ -270,5 +269,4 @@ dependencies:
       - webencodings==0.5.1
       - websocket-client==1.8.0
       - widgetsnbextension==4.0.14
-prefix: 
-  /scratch/research/taschnermandl/arthur_d/BMO_viki/.snakemake/conda/ea8665c897f24cbaf48aefb267d5fd57_
+prefix: /home/dondia/anaconda3/envs/scverse
