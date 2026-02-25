@@ -13,6 +13,7 @@ IS_LOCAL = config.get('IS_LOCAL', False)
 IS_FILTERED = config['IS_FILTERED']
 IS_ANNOTATED = config['IS_ANNOTATED']
 IS_BATCHED = config['IS_BATCHED']
+IS_LABEL_TRANSFER = config.get('IS_LABEL_TRANSFER', False)
 
 
 def get_CTYPES(samples):

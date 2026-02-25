@@ -34,6 +34,7 @@ IS_LOCAL: True
 IS_FILTERED: False
 IS_ANNOTATED: False
 IS_BATCHED: False
+IS_LABEL_TRANSFER: True
 
 General:
   genome: "hg38"
@@ -62,6 +63,13 @@ QC_RNA:
   PlottingAnnotations:
     doublets: "Doublets Undefined" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
     leiden_res: "leiden_res_0.50"
+
+  LabelTransfer:
+    reference_h5ad: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/data/frenz-wiessner2024.scRNA/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad"
+    reference_columns:
+      - "author_cell_type_coarse_grained"
+      - "author_cell_type"
+    n_neighbors: 15
 
   TrajectoryAnalysis:
     diffusion_component: 1
