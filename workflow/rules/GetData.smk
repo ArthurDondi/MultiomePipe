@@ -12,6 +12,7 @@ if IS_10X_REPO:
             "benchmark/GetRawData/{sample}.benchmark.txt"
         shell:
             r"""
+            exec > {log} 2>&1
             wget -O {output} "{params.url}_raw_feature_bc_matrix.h5"
             """
 else:
@@ -26,6 +27,7 @@ else:
             "benchmark/GetRawData/{sample}.benchmark.txt"
         shell:
             r"""
+            exec > {log} 2>&1
             wget -O {output} "{params.url}"
             """
 
@@ -43,6 +45,7 @@ rule GetRawMatrix:
         "benchmark/GetRawMatrix/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         wget -O {params.outdir}/{wildcards.sample}_raw_feature_bc_matrix.tar.gz {params.url}_raw_feature_bc_matrix.tar.gz
         tar -xvzf {params.outdir}/{wildcards.sample}_raw_feature_bc_matrix.tar.gz -C {params.outdir}/{wildcards.sample}/
         """
@@ -58,6 +61,7 @@ rule GetFilteredData:
         "benchmark/GetFilteredData/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         wget -O {output} {params.url}_filtered_feature_bc_matrix.h5
         """
 
@@ -74,6 +78,7 @@ rule GetATACData:
         "benchmark/GetATACData/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         wget -O {output.peak_annotation} {params.url}_atac_peak_annotation.tsv
         wget -O {output.fragments} {params.url}_atac_fragments.tsv.gz
         wget -O {output.fragments_table} {params.url}_atac_fragments.tsv.gz.tbi

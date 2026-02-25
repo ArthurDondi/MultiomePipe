@@ -32,6 +32,7 @@ rule CellbenderRemoveBackgroundRNA:
         "benchmark/CellBenderRemoveBackgroundRNA/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         cellbender remove-background \
             {params.cuda} \
             --cpu-threads {threads} \
@@ -63,6 +64,7 @@ rule CellbenderToH5ad:
         "benchmark/CellbenderToH5ad/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --cellbender_input {input.cellbender_input} \
         --cellbender_output {input.cellbender_output} \
@@ -92,6 +94,7 @@ rule RawFilteringRNA:
         "benchmark/RawFilteringRNA/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
@@ -126,6 +129,7 @@ rule MergeSamplesAnnData:
         "benchmark/MergeSamplesAnnData/merged.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --input {input.h5ads} \
         --output {output.h5ad} \
@@ -156,6 +160,7 @@ rule BatchCorrection:
         "benchmark/BatchCorrection/merged.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
@@ -219,6 +224,7 @@ rule PlottingAnnotationsManual:
         "benchmark/PlottingAnnotations/merged.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
@@ -252,6 +258,7 @@ rule PlottingAnnotationsAutomatic:
         "benchmark/PlottingAnnotations/merged.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
@@ -287,6 +294,7 @@ rule TrajectoryAnalysis:
         "benchmark/TrajectoryAnalysis/merged.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
