@@ -50,6 +50,7 @@ checkpoint ExportPseudobulk:
         "benchmark/ExportPseudobulk/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --fragments {input.fragments} \
             --cell_data {input.cell_data} \
@@ -104,6 +105,7 @@ rule MACS3CallPeaks:
         "benchmark/MACS3CallPeaks/{sample}_{celltype}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         mkdir -p {params.outdir}
         macs3 callpeak \
             --treatment {input.fragments} \
@@ -135,6 +137,7 @@ rule GetConsensusPeaks:
         "benchmark/GetConsensusPeaks/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --inputs {input.narrowpeaks} \
             --output {output} \
@@ -156,6 +159,7 @@ rule DownloadTSS:
         "benchmark/DownloadTSS/AllSamples.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --tss_dataset {params.tss_dataset} \
             --tss_host {params.tss_host} \
@@ -185,6 +189,7 @@ rule ComputeQC:
         "benchmark/ComputeQC/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         pycistopic qc \
             --fragments {input.fragments} \
             --regions {input.consensus} \
@@ -217,6 +222,7 @@ rule ApplyQC:
         "benchmark/ApplyQC/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --outdir {params.outdir} \
             --sample {wildcards.sample} \
@@ -247,6 +253,7 @@ rule CreateATACCountMatrix:
         "benchmark/CreateATACCountMatrix/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --sample {wildcards.sample} \
             --barcodes {input.barcodes} \
@@ -284,6 +291,7 @@ rule RunLDAModels:
         "benchmark/RunLDAModels/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --outdir {params.outdir} \
             --in_cistopic_obj {input.pkl} \
@@ -313,6 +321,7 @@ rule Clustering:
         "benchmark/Clustering/{sample}.benchmark.txt"
     shell:
         r"""
+        exec > {log} 2>&1
         python {params.script} \
             --outdir {params.outdir} \
             --in_cistopic_obj {input.pkl} \
