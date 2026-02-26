@@ -2,3 +2,4 @@
 #launch.json folder
 .vscode/
 data/Mallet*
+workflow/scripts/QC/__pycache__/

@@ -12,6 +12,7 @@ Run:
   # QC the ATAC data
   QC_ATAC: False
   TRAJ: False
+  LABEL_TRANSFER: True
 
 samples:
   BMOalone:
@@ -60,8 +61,15 @@ QC_RNA:
     n_top_genes: 2000
 
   PlottingAnnotations:
-    doublets: "Doublets Undefined" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
-    leiden_res: "leiden_res_0.50"
+    doublets: "Doublets 'Low quality'" # All the clusters you want to remove, e.g. "Doublets Undefined T.cells"
+    leiden_res: "leiden_res_1.00" # The leiden resolution you want to plot, e.g. "leiden_res_1.0"
+
+  LabelTransfer:
+    reference_h5ad: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/data/frenz-wiessner2024.scRNA/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad"
+    reference_columns:
+      - "author_cell_type_coarse_grained"
+      - "author_cell_type"
+    n_neighbors: 15
 
   TrajectoryAnalysis:
     diffusion_component: 1
