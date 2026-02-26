@@ -127,9 +127,6 @@ def label_transfer(adata, reference_h5ad, columns, celltype_key, n_neighbors, pl
         adata.obs[col] = adata_q_hvg.obs[col].values
         print(f"  Transferred '{col}': {adata.obs[col].nunique()} unique labels")
 
-    # Set primary celltype_key to the first transferred column
-    adata.obs[celltype_key] = adata.obs[columns[0]].values
-
     # ---- Plots -----------------------------------------------------------
     sc.settings.figdir = plotdir
     for col in columns:

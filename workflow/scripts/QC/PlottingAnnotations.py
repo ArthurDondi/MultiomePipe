@@ -56,11 +56,12 @@ def plot_and_add_annotations(adata, annotation_file, plotdir, celltype_key, doub
         bottom=counts.cumsum().shift(fill_value=0), 
         color=adata.uns.get(celltype_key +"_colors", None)
     )
-    plt.xticks([0], [celltype_key])
+    plt.xticks([0], [celltype_key], rotation=45, ha='right')
     plt.ylabel("Number of cells")
     plt.legend(title="Cell type", bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.title("Stacked histogram of cell types")
-    plt.savefig(f"{plotdir}/stacked_histogram_global.png", dpi=300)
+    plt.tight_layout()
+    plt.savefig(f"{plotdir}/stacked_histogram_global.png", dpi=300, bbox_inches="tight")
     plt.close()
 
     ### Plot cell types distribution per sample
@@ -74,6 +75,7 @@ def plot_and_add_annotations(adata, annotation_file, plotdir, celltype_key, doub
     )
 
     plt.ylabel("Number of cells")
+    plt.xticks(rotation=45, ha='right')
     plt.title("Stacked histogram of cell types per sample")
 
     # Manually create legend

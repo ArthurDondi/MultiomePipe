@@ -171,38 +171,6 @@ rule BatchCorrection:
         --sample_key {params.sample_key}
         """
 
-if IS_LABEL_TRANSFER:
-    rule LabelTransfer:
-        input:
-            h5ad = "QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
-        output:
-            h5ad = "QC/RNA/Merged/BatchCorrection/merged.label_transferred.h5ad",
-        params:
-            script = f"{workflow.basedir}/scripts/QC/LabelTransfer.py",
-            plotdir = "QC/RNA/Merged/BatchCorrection/Plots",
-            reference = config['QC_RNA']['LabelTransfer']['reference_h5ad'],
-            reference_columns = " ".join(config['QC_RNA']['LabelTransfer']['reference_columns']),
-            celltype_key = config['General']['celltype_key'],
-            n_neighbors = config['QC_RNA']['LabelTransfer'].get('n_neighbors', 15),
-        conda:
-            "../envs/scverse.yaml"
-        log:
-            "logs/LabelTransfer/merged.log"
-        benchmark:
-            "benchmark/LabelTransfer/merged.benchmark.txt"
-        shell:
-            r"""
-            exec > {log} 2>&1
-            python -W ignore {params.script} \
-            --input {input.h5ad} \
-            --output {output.h5ad} \
-            --reference {params.reference} \
-            --reference_columns {params.reference_columns} \
-            --celltype_key {params.celltype_key} \
-            --n_neighbors {params.n_neighbors} \
-            --plotdir {params.plotdir}
-            """
-
 
 if not IS_ANNOTATED:
     rule ManualAnnotation:
@@ -237,7 +205,7 @@ if not IS_ANNOTATED:
 
 rule PlottingAnnotationsManual:
     input:
-        h5ad = "QC/RNA/Merged/BatchCorrection/merged.label_transferred.h5ad" if IS_LABEL_TRANSFER else "QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
+        h5ad = "QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
         manual_annotation = "QC/RNA/Merged/Annotation/merged_manual_annotation.json",
         check = "QC/RNA/Merged/Annotation/merged_manual_annotation.checked"
     output:
@@ -302,6 +270,37 @@ rule PlottingAnnotationsAutomatic:
         --leiden_res {params.leiden_res} \
         --mode auto
         """     
+
+rule LabelTransfer:
+    input:
+        h5ad = "QC/RNA/Merged/Annotation/merged.annotated.h5ad",
+    output:
+        h5ad = "QC/RNA/Merged/LabelTransfer/merged.label_transferred.h5ad",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/LabelTransfer.py",
+        plotdir = "QC/RNA/Merged/LabelTransfer/Plots",
+        reference = config['QC_RNA']['LabelTransfer']['reference_h5ad'],
+        reference_columns = " ".join(config['QC_RNA']['LabelTransfer']['reference_columns']),
+        celltype_key = config['General']['celltype_key'],
+        n_neighbors = config['QC_RNA']['LabelTransfer'].get('n_neighbors', 15),
+    conda:
+        "../envs/scverse.yaml"
+    log:
+        "logs/LabelTransfer/merged.log"
+    benchmark:
+        "benchmark/LabelTransfer/merged.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python -W ignore {params.script} \
+        --input {input.h5ad} \
+        --output {output.h5ad} \
+        --reference {params.reference} \
+        --reference_columns {params.reference_columns} \
+        --celltype_key {params.celltype_key} \
+        --n_neighbors {params.n_neighbors} \
+        --plotdir {params.plotdir}
+        """
 
 rule TrajectoryAnalysis:
     input:

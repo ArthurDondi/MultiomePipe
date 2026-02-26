@@ -4,6 +4,7 @@ import pandas as pd
 QC_RNA=config['Run']['QC_RNA']
 QC_ATAC=config['Run']['QC_ATAC']
 TRAJ = config['Run']['TRAJ']
+LABEL_TRANSFER = config['Run'].get('LABEL_TRANSFER', False)
 
 INPUT = config['User']['input_dir']
 SAMPLES = config["samples"]
@@ -13,7 +14,7 @@ IS_LOCAL = config.get('IS_LOCAL', False)
 IS_FILTERED = config['IS_FILTERED']
 IS_ANNOTATED = config['IS_ANNOTATED']
 IS_BATCHED = config['IS_BATCHED']
-IS_LABEL_TRANSFER = config.get('IS_LABEL_TRANSFER', False)
+
 
 
 def get_CTYPES(samples):

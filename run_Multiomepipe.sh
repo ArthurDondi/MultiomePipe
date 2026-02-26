@@ -9,15 +9,16 @@
 # nohup ... &> snakemake.log & : run detached from the terminal; both stdout and stderr
 #                               are written to snakemake.log; the job survives terminal close.
 # $! is the PID of the background process, printed so you can monitor or kill it.
+# --allowed-rules LabelTransfer,ManualAnnotation,CheckManualAnnotation,PlottingAnnotationsManual,TrajectoryAnalysis,MultiomePipe_output \
 
-nohup snakemake \
+
+snakemake \
     -s workflow/Snakefile \
     --configfile config/config_BMO_Viki.yaml \
     --cores 8 \
     --use-conda \
     -p \
     --resources mem_mb=64000 nvidia_gpu=1 \
-    --conda-frontend conda \
-    &> snakemake.log &
+    --rerun-triggers mtime params \
+    --conda-frontend conda 
 
-echo "Snakemake started in background (PID $!). Follow progress with: tail -f snakemake.log"

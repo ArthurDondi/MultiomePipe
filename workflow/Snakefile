@@ -12,6 +12,7 @@ rule MultiomePipe_output:
         # QC RNA
         "QC/RNA/Merged/Annotation/merged.annotated.h5ad" if QC_RNA else [],
         "QC/RNA/Merged/Annotation/merged.CellTypeAnnotations.csv" if QC_RNA else [],
+        "QC/RNA/Merged/LabelTransfer/merged.label_transferred.h5ad" if LABEL_TRANSFER else [],
         # Trajectory Analysis 
         "QC/RNA/Merged/TrajectoryAnalysis/merged.diffusion.h5ad" if TRAJ else [],
         # QC ATAC
