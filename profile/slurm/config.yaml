@@ -1,0 +1,37 @@
+# Snakemake profile for SLURM execution
+#
+# Requires snakemake-executor-plugin-slurm:
+#   pip install snakemake-executor-plugin-slurm
+#
+# Usage:
+#   snakemake --profile profile/slurm ...
+#
+# Adjust slurm_partition, mem_mb, and runtime to match your cluster.
+
+executor: slurm
+
+# Default resources applied to every rule unless overridden in the rule itself
+default-resources:
+  slurm_partition: "cpu"        # Change to your cluster's partition name
+  mem_mb: 8000                  # 8 GB RAM per job
+  runtime: 120                  # Wall-clock limit in minutes (2 h)
+  cpus_per_task: 1              # Default CPUs per Slurm task
+  tasks: 1
+
+# Allow one automatic retry on failure (useful for transient I/O errors)
+retries: 1
+
+# Maximum number of Slurm jobs submitted in parallel
+jobs: 50
+
+# Conda settings (mirrors the local run script)
+use-conda: true
+conda-frontend: conda
+
+# Print shell commands as they are executed
+printshellcmds: true
+
+# Re-submit a job when its input modification time or parameters change
+rerun-triggers:
+  - mtime
+  - params
