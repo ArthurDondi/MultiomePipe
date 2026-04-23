@@ -3,16 +3,17 @@ import argparse
 import timeit
 import anndata as ad
 import scanpy as sc
+import pandas as pd
 import json
 
 # -----------------------------
 # Functions
 # -----------------------------
-def merge_data(input_files, samples):
+def merge_data(input_files, samples, donor_key, sample_key):
 
     adatas = [ad.io.read_h5ad(f) for f in sorted(input_files)]
-    #Adding sample name to cell names
-    for adata,sample in zip(adatas,samples):
+    #Adding sample name to cell names — use sorted(samples) to match sorted file order
+    for adata, sample in zip(adatas, sorted(samples)):
         adata.var_names_make_unique()
         adata.obs['barcodes'] = adata.obs_names
         adata.obs_names = adata.obs_names+'-'+sample
@@ -28,6 +29,16 @@ def merge_data(input_files, samples):
     print("Concat done")
     del adatas
     adata_concat.X = adata_concat.layers['cellbender']
+
+    # Ensure both donor and sample columns use a consistent sorted categorical order
+    # so that colour palettes are assigned identically in every UMAP panel.
+    for col in [donor_key, sample_key]:
+        if col in adata_concat.obs.columns:
+            adata_concat.obs[col] = pd.Categorical(
+                adata_concat.obs[col],
+                categories=sorted(adata_concat.obs[col].unique())
+            )
+
     return adata_concat
 
 def plot_qc_metrics(adata):
@@ -128,7 +139,7 @@ def main():
     # 1. Merge data
     print("1. Merge data")
     start = timeit.default_timer()
-    adata = merge_data(input_files, samples)
+    adata = merge_data(input_files, samples, donor_key, sample_key)
     stop = timeit.default_timer()
     print(f"Loaded data in {round(stop-start,2)}s")
 
