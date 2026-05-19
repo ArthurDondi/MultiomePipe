@@ -58,7 +58,7 @@ if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
                 CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
             ),
             sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
-            create_bam = CELLRANGER_COUNT_CFG.get('create_bam', 'false'),
+            create_bam = lambda wildcards: str(CELLRANGER_COUNT_CFG.get('create_bam', False)).lower(),
             localmem = CELLRANGER_COUNT_CFG.get('localmem', 64),
         threads: CELLRANGER_COUNT_CFG.get('localcores', 8)
         log:
@@ -69,6 +69,7 @@ if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
             r"""
             exec > {log} 2>&1
             mkdir -p {params.outdir}
+            cd {params.outdir}
             cellranger count \
                 --id={wildcards.sample} \
                 --transcriptome={input.transcriptome} \
@@ -76,8 +77,7 @@ if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
                 --sample={params.sample_name} \
                 --create-bam={params.create_bam} \
                 --localcores={threads} \
-                --localmem={params.localmem} \
-                --output-dir={params.outdir}
+                --localmem={params.localmem}
             """
 
 ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
