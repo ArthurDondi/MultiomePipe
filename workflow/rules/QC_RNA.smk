@@ -5,6 +5,81 @@
 import os
 import json
 
+CELLRANGER_MKREF_CFG = config.get('QC_RNA', {}).get('CellRangerMkref', {})
+CELLRANGER_COUNT_CFG = config.get('QC_RNA', {}).get('CellRangerCount', {})
+
+CELLRANGER_MKREF_GENOME = CELLRANGER_MKREF_CFG.get('genome', 'GRCh38_GFP')
+CELLRANGER_MKREF_FASTA = CELLRANGER_MKREF_CFG.get('fasta')
+CELLRANGER_MKREF_GENES = CELLRANGER_MKREF_CFG.get('genes')
+CELLRANGER_MKREF_OUTDIR = CELLRANGER_MKREF_CFG.get('output_dir')
+
+if CELLRANGER_MKREF_OUTDIR:
+    CELLRANGER_MKREF_TRANSCRIPTOME = f"{CELLRANGER_MKREF_OUTDIR}/{CELLRANGER_MKREF_GENOME}"
+else:
+    CELLRANGER_MKREF_TRANSCRIPTOME = None
+
+CELLRANGER_TRANSCRIPTOME = CELLRANGER_COUNT_CFG.get('transcriptome', CELLRANGER_MKREF_TRANSCRIPTOME)
+CELLRANGER_COUNT_ENABLED = CELLRANGER_COUNT_CFG.get('enabled', False)
+
+if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR:
+    rule CellRangerMkref:
+        output:
+            ref = directory(CELLRANGER_MKREF_TRANSCRIPTOME),
+        params:
+            outdir = CELLRANGER_MKREF_OUTDIR,
+            genome = CELLRANGER_MKREF_GENOME,
+            fasta = CELLRANGER_MKREF_FASTA,
+            genes = CELLRANGER_MKREF_GENES,
+        log:
+            "logs/CellRangerMkref/mkref.log"
+        benchmark:
+            "benchmark/CellRangerMkref/mkref.benchmark.txt"
+        shell:
+            r"""
+            exec > {log} 2>&1
+            mkdir -p {params.outdir}
+            cd {params.outdir}
+            cellranger mkref \
+                --genome={params.genome} \
+                --fasta={params.fasta} \
+                --genes={params.genes}
+            """
+
+if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
+    rule CellRangerCount:
+        input:
+            transcriptome = CELLRANGER_TRANSCRIPTOME,
+        output:
+            h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
+        params:
+            outdir = INPUT,
+            fastqs = lambda wildcards: SAMPLES[wildcards.sample].get(
+                'fastqs',
+                CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
+            ),
+            sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
+            create_bam = CELLRANGER_COUNT_CFG.get('create_bam', 'false'),
+            localmem = CELLRANGER_COUNT_CFG.get('localmem', 64),
+        threads: CELLRANGER_COUNT_CFG.get('localcores', 8)
+        log:
+            "logs/CellRangerCount/{sample}.log"
+        benchmark:
+            "benchmark/CellRangerCount/{sample}.benchmark.txt"
+        shell:
+            r"""
+            exec > {log} 2>&1
+            mkdir -p {params.outdir}
+            cellranger count \
+                --id={wildcards.sample} \
+                --transcriptome={input.transcriptome} \
+                --fastqs={params.fastqs} \
+                --sample={params.sample_name} \
+                --create-bam={params.create_bam} \
+                --localcores={threads} \
+                --localmem={params.localmem} \
+                --output-dir={params.outdir}
+            """
+
 ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
 
 rule CellbenderRemoveBackgroundRNA:
