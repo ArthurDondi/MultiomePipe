@@ -44,6 +44,12 @@ def _get_cellranger_fastqs(wildcards):
         )
     )
 
+def _get_cellranger_transcriptome(wildcards):
+    transcriptome = _cellranger_count_cfg().get('transcriptome')
+    if transcriptome:
+        return _abs_path(transcriptome)
+    return rules.CellRangerMkref.output.ref
+
 rule CellRangerMkref:
     output:
         ref = directory(_cellranger_mkref_refdir()),
@@ -69,7 +75,7 @@ rule CellRangerMkref:
 
 rule CellRangerCount:
     input:
-        transcriptome = lambda wildcards: _abs_path(_cellranger_count_cfg().get('transcriptome', _cellranger_mkref_refdir())),
+        transcriptome = _get_cellranger_transcriptome,
     output:
         h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
     params:
