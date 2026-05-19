@@ -8,8 +8,18 @@ import json
 def _abs_path(path):
     return os.path.abspath(path) if path else path
 
+def _cellranger_mkref_cfg():
+    return config.get('QC_RNA', {}).get('CellRangerMkref', {})
+
+def _cellranger_count_cfg():
+    return config.get('QC_RNA', {}).get('CellRangerCount', {})
+
+def _cellranger_mkref_refdir():
+    mkref_cfg = _cellranger_mkref_cfg()
+    return f"{mkref_cfg.get('output_dir', 'cellranger_ref')}/{mkref_cfg.get('genome', 'GRCh38_GFP')}"
+
 def _get_cellranger_fastqs(wildcards):
-    cellranger_count_cfg = config.get('QC_RNA', {}).get('CellRangerCount', {})
+    cellranger_count_cfg = _cellranger_count_cfg()
     return _abs_path(
         SAMPLES[wildcards.sample].get(
             'fastqs',
@@ -19,12 +29,12 @@ def _get_cellranger_fastqs(wildcards):
 
 rule CellRangerMkref:
     output:
-        ref = directory(lambda wildcards: f"{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('output_dir', 'cellranger_ref')}/{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genome', 'GRCh38_GFP')}"),
+        ref = directory(lambda wildcards: _cellranger_mkref_refdir()),
     params:
-        outdir = lambda wildcards: config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('output_dir', 'cellranger_ref'),
-        genome = lambda wildcards: config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genome', 'GRCh38_GFP'),
-        fasta = lambda wildcards: _abs_path(config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('fasta')),
-        genes = lambda wildcards: _abs_path(config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genes')),
+        outdir = lambda wildcards: _cellranger_mkref_cfg().get('output_dir', 'cellranger_ref'),
+        genome = lambda wildcards: _cellranger_mkref_cfg().get('genome', 'GRCh38_GFP'),
+        fasta = lambda wildcards: _abs_path(_cellranger_mkref_cfg().get('fasta')),
+        genes = lambda wildcards: _abs_path(_cellranger_mkref_cfg().get('genes')),
     log:
         "logs/CellRangerMkref/mkref.log"
     benchmark:
@@ -42,19 +52,16 @@ rule CellRangerMkref:
 
 rule CellRangerCount:
     input:
-        transcriptome = lambda wildcards: _abs_path(config.get('QC_RNA', {}).get('CellRangerCount', {}).get(
-            'transcriptome',
-            f"{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('output_dir', 'cellranger_ref')}/{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genome', 'GRCh38_GFP')}"
-        )),
+        transcriptome = lambda wildcards: _abs_path(_cellranger_count_cfg().get('transcriptome', _cellranger_mkref_refdir())),
     output:
         h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
     params:
         outdir = INPUT,
         fastqs = _get_cellranger_fastqs,
         fastq_sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
-        create_bam = lambda wildcards: "true" if config.get('QC_RNA', {}).get('CellRangerCount', {}).get('create_bam', False) else "false",
-        localmem = lambda wildcards: config.get('QC_RNA', {}).get('CellRangerCount', {}).get('localmem', 64),
-    threads: config.get('QC_RNA', {}).get('CellRangerCount', {}).get('localcores', 8)
+        create_bam = lambda wildcards: "true" if _cellranger_count_cfg().get('create_bam', False) else "false",
+        localmem = lambda wildcards: _cellranger_count_cfg().get('localmem', 64),
+    threads: lambda wildcards: _cellranger_count_cfg().get('localcores', 8)
     log:
         "logs/CellRangerCount/{sample}.log"
     benchmark:
