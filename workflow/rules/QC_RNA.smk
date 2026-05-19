@@ -37,12 +37,19 @@ def _cellranger_mkref_refdir():
 
 def _get_cellranger_fastqs(wildcards):
     cellranger_count_cfg = _cellranger_count_cfg()
+    sample_cfg = _get_sample_cfg(wildcards)
     return _abs_path(
-        SAMPLES[wildcards.sample].get(
+        sample_cfg.get(
             'fastqs',
             cellranger_count_cfg.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
         )
     )
+
+def _get_sample_cfg(wildcards):
+    sample_cfg = SAMPLES.get(wildcards.sample)
+    if sample_cfg is None:
+        raise KeyError(f"Sample '{wildcards.sample}' is missing from config.samples")
+    return sample_cfg
 
 def _get_cellranger_transcriptome(wildcards):
     transcriptome = _cellranger_count_cfg().get('transcriptome')
@@ -81,7 +88,7 @@ rule CellRangerCount:
     params:
         outdir = INPUT,
         fastqs = _get_cellranger_fastqs,
-        fastq_sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
+        fastq_sample_name = lambda wildcards: _get_sample_cfg(wildcards).get('cellranger_sample', wildcards.sample),
         create_bam_flag = lambda wildcards: "--create-bam=true" if _cellranger_count_cfg().get('create_bam', False) else "--create-bam=false",
         localmem = lambda wildcards: _cellranger_count_cfg().get('localmem', 64),
     threads: lambda wildcards: _cellranger_count_cfg().get('localcores', 8)
