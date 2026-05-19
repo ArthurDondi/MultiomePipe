@@ -14,9 +14,26 @@ def _cellranger_mkref_cfg():
 def _cellranger_count_cfg():
     return config.get('QC_RNA', {}).get('CellRangerCount', {})
 
+def _cellranger_mkref_genome():
+    return _cellranger_mkref_cfg().get('genome', 'GRCh38_GFP')
+
+def _cellranger_mkref_outdir():
+    return _cellranger_mkref_cfg().get('output_dir', 'cellranger_ref')
+
+def _cellranger_mkref_fasta():
+    fasta = _cellranger_mkref_cfg().get('fasta')
+    if not fasta:
+        raise ValueError("Missing QC_RNA.CellRangerMkref.fasta in config")
+    return _abs_path(fasta)
+
+def _cellranger_mkref_genes():
+    genes = _cellranger_mkref_cfg().get('genes')
+    if not genes:
+        raise ValueError("Missing QC_RNA.CellRangerMkref.genes in config")
+    return _abs_path(genes)
+
 def _cellranger_mkref_refdir():
-    mkref_cfg = _cellranger_mkref_cfg()
-    return f"{mkref_cfg.get('output_dir', 'cellranger_ref')}/{mkref_cfg.get('genome', 'GRCh38_GFP')}"
+    return f"{_cellranger_mkref_outdir()}/{_cellranger_mkref_genome()}"
 
 def _get_cellranger_fastqs(wildcards):
     cellranger_count_cfg = _cellranger_count_cfg()
@@ -29,12 +46,12 @@ def _get_cellranger_fastqs(wildcards):
 
 rule CellRangerMkref:
     output:
-        ref = directory(lambda wildcards: _cellranger_mkref_refdir()),
+        ref = directory(_cellranger_mkref_refdir()),
     params:
-        outdir = lambda wildcards: _cellranger_mkref_cfg().get('output_dir', 'cellranger_ref'),
-        genome = lambda wildcards: _cellranger_mkref_cfg().get('genome', 'GRCh38_GFP'),
-        fasta = lambda wildcards: _abs_path(_cellranger_mkref_cfg().get('fasta')),
-        genes = lambda wildcards: _abs_path(_cellranger_mkref_cfg().get('genes')),
+        outdir = lambda wildcards: _cellranger_mkref_outdir(),
+        genome = lambda wildcards: _cellranger_mkref_genome(),
+        fasta = lambda wildcards: _cellranger_mkref_fasta(),
+        genes = lambda wildcards: _cellranger_mkref_genes(),
     log:
         "logs/CellRangerMkref/mkref.log"
     benchmark:
@@ -59,7 +76,7 @@ rule CellRangerCount:
         outdir = INPUT,
         fastqs = _get_cellranger_fastqs,
         fastq_sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
-        create_bam = lambda wildcards: "true" if _cellranger_count_cfg().get('create_bam', False) else "false",
+        create_bam_flag = lambda wildcards: "--create-bam=true" if _cellranger_count_cfg().get('create_bam', False) else "--create-bam=false",
         localmem = lambda wildcards: _cellranger_count_cfg().get('localmem', 64),
     threads: lambda wildcards: _cellranger_count_cfg().get('localcores', 8)
     log:
@@ -76,7 +93,7 @@ rule CellRangerCount:
             --transcriptome={input.transcriptome} \
             --fastqs={params.fastqs} \
             --sample={params.fastq_sample_name} \
-            --create-bam={params.create_bam} \
+            {params.create_bam_flag} \
             --localcores={threads} \
             --localmem={params.localmem}
         """
