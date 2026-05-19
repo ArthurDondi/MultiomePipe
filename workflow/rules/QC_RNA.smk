@@ -28,8 +28,8 @@ if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR
         params:
             outdir = CELLRANGER_MKREF_OUTDIR,
             genome = CELLRANGER_MKREF_GENOME,
-            fasta = CELLRANGER_MKREF_FASTA,
-            genes = CELLRANGER_MKREF_GENES,
+            fasta = os.path.abspath(CELLRANGER_MKREF_FASTA),
+            genes = os.path.abspath(CELLRANGER_MKREF_GENES),
         log:
             "logs/CellRangerMkref/mkref.log"
         benchmark:
@@ -48,14 +48,16 @@ if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR
 if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
     rule CellRangerCount:
         input:
-            transcriptome = CELLRANGER_TRANSCRIPTOME,
+            transcriptome = os.path.abspath(CELLRANGER_TRANSCRIPTOME),
         output:
             h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
         params:
             outdir = INPUT,
-            fastqs = lambda wildcards: SAMPLES[wildcards.sample].get(
-                'fastqs',
-                CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
+            fastqs = lambda wildcards: os.path.abspath(
+                SAMPLES[wildcards.sample].get(
+                    'fastqs',
+                    CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
+                )
             ),
             sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
             create_bam = lambda wildcards: str(CELLRANGER_COUNT_CFG.get('create_bam', False)).lower(),
