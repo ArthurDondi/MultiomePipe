@@ -45,6 +45,18 @@ General:
 QC_RNA:
   raw_data: True
 
+  CellRangerMkref:
+    genome: "GRCh38_GFP"
+    fasta: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/hg38_plus_GFP.fa"
+    genes: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/hg38_plus_GFP.gtf"
+    output_dir: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/cellranger_ref"
+
+  CellRangerCount:
+    transcriptome: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/cellranger_ref/GRCh38_GFP"
+    localcores: 8
+    localmem: 64
+    create_bam: false
+
   CellbenderRemoveBackgroundRNA:
     cuda: '--cuda'
     epochs: 150

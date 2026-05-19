@@ -5,6 +5,112 @@
 import os
 import json
 
+def _abs_path(path):
+    return os.path.abspath(path) if path else path
+
+def _cellranger_mkref_cfg():
+    return config.get('QC_RNA', {}).get('CellRangerMkref', {})
+
+def _cellranger_count_cfg():
+    return config.get('QC_RNA', {}).get('CellRangerCount', {})
+
+def _cellranger_mkref_genome():
+    return _cellranger_mkref_cfg().get('genome', 'GRCh38_GFP')
+
+def _cellranger_mkref_outdir():
+    return _cellranger_mkref_cfg().get('output_dir', 'cellranger_ref')
+
+def _cellranger_mkref_fasta():
+    fasta = _cellranger_mkref_cfg().get('fasta')
+    if not fasta:
+        raise ValueError("Required configuration key QC_RNA.CellRangerMkref.fasta is missing or empty")
+    return _abs_path(fasta)
+
+def _cellranger_mkref_genes():
+    genes = _cellranger_mkref_cfg().get('genes')
+    if not genes:
+        raise ValueError("Required configuration key QC_RNA.CellRangerMkref.genes is missing or empty")
+    return _abs_path(genes)
+
+def _cellranger_mkref_refdir():
+    return f"{_cellranger_mkref_outdir()}/{_cellranger_mkref_genome()}"
+
+def _get_cellranger_fastqs(wildcards):
+    cellranger_count_cfg = _cellranger_count_cfg()
+    sample_cfg = _get_sample_cfg(wildcards)
+    return _abs_path(
+        sample_cfg.get(
+            'fastqs',
+            cellranger_count_cfg.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
+        )
+    )
+
+def _get_sample_cfg(wildcards):
+    sample_cfg = SAMPLES.get(wildcards.sample)
+    if sample_cfg is None:
+        raise KeyError(f"Sample '{wildcards.sample}' is missing from config.samples")
+    return sample_cfg
+
+def _get_cellranger_transcriptome(wildcards):
+    transcriptome = _cellranger_count_cfg().get('transcriptome')
+    if transcriptome:
+        return _abs_path(transcriptome)
+    return rules.CellRangerMkref.output.ref
+
+rule CellRangerMkref:
+    output:
+        ref = directory(_cellranger_mkref_refdir()),
+    params:
+        outdir = lambda wildcards: _cellranger_mkref_outdir(),
+        genome = lambda wildcards: _cellranger_mkref_genome(),
+        fasta = lambda wildcards: _cellranger_mkref_fasta(),
+        genes = lambda wildcards: _cellranger_mkref_genes(),
+    log:
+        "logs/CellRangerMkref/mkref.log"
+    benchmark:
+        "benchmark/CellRangerMkref/mkref.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        mkdir -p {params.outdir}
+        cd {params.outdir}
+        cellranger mkref \
+            --genome={params.genome} \
+            --fasta={params.fasta} \
+            --genes={params.genes}
+        """
+
+rule CellRangerCount:
+    input:
+        transcriptome = _get_cellranger_transcriptome,
+    output:
+        h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
+    params:
+        outdir = INPUT,
+        fastqs = _get_cellranger_fastqs,
+        fastq_sample_name = lambda wildcards: _get_sample_cfg(wildcards).get('cellranger_sample', wildcards.sample),
+        create_bam_flag = lambda wildcards: "--create-bam=true" if _cellranger_count_cfg().get('create_bam', False) else "--create-bam=false",
+        localmem = lambda wildcards: _cellranger_count_cfg().get('localmem', 64),
+    threads: lambda wildcards: _cellranger_count_cfg().get('localcores', 8)
+    log:
+        "logs/CellRangerCount/{sample}.log"
+    benchmark:
+        "benchmark/CellRangerCount/{sample}.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        mkdir -p {params.outdir}
+        cd {params.outdir}
+        cellranger count \
+            --id={wildcards.sample} \
+            --transcriptome={input.transcriptome} \
+            --fastqs={params.fastqs} \
+            --sample={params.fastq_sample_name} \
+            {params.create_bam_flag} \
+            --localcores={threads} \
+            --localmem={params.localmem}
+        """
+
 ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
 
 rule CellbenderRemoveBackgroundRNA:
