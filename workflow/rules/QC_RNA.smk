@@ -65,7 +65,7 @@ if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
         params:
             outdir = INPUT,
             fastqs = _get_cellranger_fastqs,
-            sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
+            fastq_sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
             create_bam = "true" if CELLRANGER_COUNT_CFG.get('create_bam', False) else "false",
             localmem = CELLRANGER_COUNT_CFG.get('localmem', 64),
         threads: CELLRANGER_COUNT_CFG.get('localcores', 8)
@@ -82,7 +82,7 @@ if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
                 --id={wildcards.sample} \
                 --transcriptome={input.transcriptome} \
                 --fastqs={params.fastqs} \
-                --sample={params.sample_name} \
+                --sample={params.fastq_sample_name} \
                 --create-bam={params.create_bam} \
                 --localcores={threads} \
                 --localmem={params.localmem}
