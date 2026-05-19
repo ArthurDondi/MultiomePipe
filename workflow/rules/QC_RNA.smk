@@ -21,6 +21,17 @@ else:
 CELLRANGER_TRANSCRIPTOME = CELLRANGER_COUNT_CFG.get('transcriptome', CELLRANGER_MKREF_TRANSCRIPTOME)
 CELLRANGER_COUNT_ENABLED = CELLRANGER_COUNT_CFG.get('enabled', False)
 
+def _abs_path(path):
+    return os.path.abspath(path) if path else path
+
+def _get_cellranger_fastqs(wildcards):
+    return _abs_path(
+        SAMPLES[wildcards.sample].get(
+            'fastqs',
+            CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
+        )
+    )
+
 if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR:
     rule CellRangerMkref:
         output:
@@ -28,8 +39,8 @@ if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR
         params:
             outdir = CELLRANGER_MKREF_OUTDIR,
             genome = CELLRANGER_MKREF_GENOME,
-            fasta = os.path.abspath(CELLRANGER_MKREF_FASTA),
-            genes = os.path.abspath(CELLRANGER_MKREF_GENES),
+            fasta = _abs_path(CELLRANGER_MKREF_FASTA),
+            genes = _abs_path(CELLRANGER_MKREF_GENES),
         log:
             "logs/CellRangerMkref/mkref.log"
         benchmark:
@@ -48,19 +59,14 @@ if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR
 if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
     rule CellRangerCount:
         input:
-            transcriptome = os.path.abspath(CELLRANGER_TRANSCRIPTOME),
+            transcriptome = _abs_path(CELLRANGER_TRANSCRIPTOME),
         output:
             h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
         params:
             outdir = INPUT,
-            fastqs = lambda wildcards: os.path.abspath(
-                SAMPLES[wildcards.sample].get(
-                    'fastqs',
-                    CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
-                )
-            ),
+            fastqs = _get_cellranger_fastqs,
             sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
-            create_bam = lambda wildcards: str(CELLRANGER_COUNT_CFG.get('create_bam', False)).lower(),
+            create_bam = "true" if CELLRANGER_COUNT_CFG.get('create_bam', False) else "false",
             localmem = CELLRANGER_COUNT_CFG.get('localmem', 64),
         threads: CELLRANGER_COUNT_CFG.get('localcores', 8)
         log:
