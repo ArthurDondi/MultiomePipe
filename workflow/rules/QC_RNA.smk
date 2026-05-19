@@ -5,88 +5,74 @@
 import os
 import json
 
-CELLRANGER_MKREF_CFG = config.get('QC_RNA', {}).get('CellRangerMkref', {})
-CELLRANGER_COUNT_CFG = config.get('QC_RNA', {}).get('CellRangerCount', {})
-
-CELLRANGER_MKREF_GENOME = CELLRANGER_MKREF_CFG.get('genome', 'GRCh38_GFP')
-CELLRANGER_MKREF_FASTA = CELLRANGER_MKREF_CFG.get('fasta')
-CELLRANGER_MKREF_GENES = CELLRANGER_MKREF_CFG.get('genes')
-CELLRANGER_MKREF_OUTDIR = CELLRANGER_MKREF_CFG.get('output_dir')
-
-if CELLRANGER_MKREF_OUTDIR:
-    CELLRANGER_MKREF_TRANSCRIPTOME = f"{CELLRANGER_MKREF_OUTDIR}/{CELLRANGER_MKREF_GENOME}"
-else:
-    CELLRANGER_MKREF_TRANSCRIPTOME = None
-
-CELLRANGER_TRANSCRIPTOME = CELLRANGER_COUNT_CFG.get('transcriptome', CELLRANGER_MKREF_TRANSCRIPTOME)
-CELLRANGER_COUNT_ENABLED = CELLRANGER_COUNT_CFG.get('enabled', False)
-
 def _abs_path(path):
     return os.path.abspath(path) if path else path
 
 def _get_cellranger_fastqs(wildcards):
+    cellranger_count_cfg = config.get('QC_RNA', {}).get('CellRangerCount', {})
     return _abs_path(
         SAMPLES[wildcards.sample].get(
             'fastqs',
-            CELLRANGER_COUNT_CFG.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
+            cellranger_count_cfg.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
         )
     )
 
-if CELLRANGER_MKREF_FASTA and CELLRANGER_MKREF_GENES and CELLRANGER_MKREF_OUTDIR:
-    rule CellRangerMkref:
-        output:
-            ref = directory(CELLRANGER_MKREF_TRANSCRIPTOME),
-        params:
-            outdir = CELLRANGER_MKREF_OUTDIR,
-            genome = CELLRANGER_MKREF_GENOME,
-            fasta = _abs_path(CELLRANGER_MKREF_FASTA),
-            genes = _abs_path(CELLRANGER_MKREF_GENES),
-        log:
-            "logs/CellRangerMkref/mkref.log"
-        benchmark:
-            "benchmark/CellRangerMkref/mkref.benchmark.txt"
-        shell:
-            r"""
-            exec > {log} 2>&1
-            mkdir -p {params.outdir}
-            cd {params.outdir}
-            cellranger mkref \
-                --genome={params.genome} \
-                --fasta={params.fasta} \
-                --genes={params.genes}
-            """
+rule CellRangerMkref:
+    output:
+        ref = directory(lambda wildcards: f"{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('output_dir', 'cellranger_ref')}/{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genome', 'GRCh38_GFP')}"),
+    params:
+        outdir = lambda wildcards: config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('output_dir', 'cellranger_ref'),
+        genome = lambda wildcards: config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genome', 'GRCh38_GFP'),
+        fasta = lambda wildcards: _abs_path(config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('fasta')),
+        genes = lambda wildcards: _abs_path(config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genes')),
+    log:
+        "logs/CellRangerMkref/mkref.log"
+    benchmark:
+        "benchmark/CellRangerMkref/mkref.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        mkdir -p {params.outdir}
+        cd {params.outdir}
+        cellranger mkref \
+            --genome={params.genome} \
+            --fasta={params.fasta} \
+            --genes={params.genes}
+        """
 
-if CELLRANGER_COUNT_ENABLED and CELLRANGER_TRANSCRIPTOME:
-    rule CellRangerCount:
-        input:
-            transcriptome = _abs_path(CELLRANGER_TRANSCRIPTOME),
-        output:
-            h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
-        params:
-            outdir = INPUT,
-            fastqs = _get_cellranger_fastqs,
-            fastq_sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
-            create_bam = "true" if CELLRANGER_COUNT_CFG.get('create_bam', False) else "false",
-            localmem = CELLRANGER_COUNT_CFG.get('localmem', 64),
-        threads: CELLRANGER_COUNT_CFG.get('localcores', 8)
-        log:
-            "logs/CellRangerCount/{sample}.log"
-        benchmark:
-            "benchmark/CellRangerCount/{sample}.benchmark.txt"
-        shell:
-            r"""
-            exec > {log} 2>&1
-            mkdir -p {params.outdir}
-            cd {params.outdir}
-            cellranger count \
-                --id={wildcards.sample} \
-                --transcriptome={input.transcriptome} \
-                --fastqs={params.fastqs} \
-                --sample={params.fastq_sample_name} \
-                --create-bam={params.create_bam} \
-                --localcores={threads} \
-                --localmem={params.localmem}
-            """
+rule CellRangerCount:
+    input:
+        transcriptome = lambda wildcards: _abs_path(config.get('QC_RNA', {}).get('CellRangerCount', {}).get(
+            'transcriptome',
+            f"{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('output_dir', 'cellranger_ref')}/{config.get('QC_RNA', {}).get('CellRangerMkref', {}).get('genome', 'GRCh38_GFP')}"
+        )),
+    output:
+        h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
+    params:
+        outdir = INPUT,
+        fastqs = _get_cellranger_fastqs,
+        fastq_sample_name = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
+        create_bam = lambda wildcards: "true" if config.get('QC_RNA', {}).get('CellRangerCount', {}).get('create_bam', False) else "false",
+        localmem = lambda wildcards: config.get('QC_RNA', {}).get('CellRangerCount', {}).get('localmem', 64),
+    threads: config.get('QC_RNA', {}).get('CellRangerCount', {}).get('localcores', 8)
+    log:
+        "logs/CellRangerCount/{sample}.log"
+    benchmark:
+        "benchmark/CellRangerCount/{sample}.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        mkdir -p {params.outdir}
+        cd {params.outdir}
+        cellranger count \
+            --id={wildcards.sample} \
+            --transcriptome={input.transcriptome} \
+            --fastqs={params.fastqs} \
+            --sample={params.fastq_sample_name} \
+            --create-bam={params.create_bam} \
+            --localcores={threads} \
+            --localmem={params.localmem}
+        """
 
 ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
 

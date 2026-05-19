@@ -52,7 +52,6 @@ QC_RNA:
     output_dir: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/cellranger_ref"
 
   CellRangerCount:
-    enabled: False
     transcriptome: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/cellranger_ref/GRCh38_GFP"
     localcores: 8
     localmem: 64
