@@ -23,13 +23,13 @@ def _cellranger_mkref_outdir():
 def _cellranger_mkref_fasta():
     fasta = _cellranger_mkref_cfg().get('fasta')
     if not fasta:
-        raise ValueError("Missing QC_RNA.CellRangerMkref.fasta in config")
+        raise ValueError("Required configuration key QC_RNA.CellRangerMkref.fasta is missing or empty")
     return _abs_path(fasta)
 
 def _cellranger_mkref_genes():
     genes = _cellranger_mkref_cfg().get('genes')
     if not genes:
-        raise ValueError("Missing QC_RNA.CellRangerMkref.genes in config")
+        raise ValueError("Required configuration key QC_RNA.CellRangerMkref.genes is missing or empty")
     return _abs_path(genes)
 
 def _cellranger_mkref_refdir():
