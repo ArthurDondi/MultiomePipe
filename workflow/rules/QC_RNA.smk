@@ -5,66 +5,19 @@
 import os
 import json
 
-def _abs_path(path):
-    return os.path.abspath(path) if path else path
-
-def _cellranger_mkref_cfg():
-    return config.get('QC_RNA', {}).get('CellRangerMkref', {})
-
-def _cellranger_count_cfg():
-    return config.get('QC_RNA', {}).get('CellRangerCount', {})
-
-def _cellranger_mkref_genome():
-    return _cellranger_mkref_cfg().get('genome', 'GRCh38_GFP')
-
-def _cellranger_mkref_outdir():
-    return _cellranger_mkref_cfg().get('output_dir', 'cellranger_ref')
-
-def _cellranger_mkref_fasta():
-    fasta = _cellranger_mkref_cfg().get('fasta')
-    if not fasta:
-        raise ValueError("Required configuration key QC_RNA.CellRangerMkref.fasta is missing or empty")
-    return _abs_path(fasta)
-
-def _cellranger_mkref_genes():
-    genes = _cellranger_mkref_cfg().get('genes')
-    if not genes:
-        raise ValueError("Required configuration key QC_RNA.CellRangerMkref.genes is missing or empty")
-    return _abs_path(genes)
-
-def _cellranger_mkref_refdir():
-    return f"{_cellranger_mkref_outdir()}/{_cellranger_mkref_genome()}"
-
-def _get_cellranger_fastqs(wildcards):
-    cellranger_count_cfg = _cellranger_count_cfg()
-    sample_cfg = _get_sample_cfg(wildcards)
-    return _abs_path(
-        sample_cfg.get(
-            'fastqs',
-            cellranger_count_cfg.get('fastqs_dir', f"{INPUT}/{wildcards.sample}")
-        )
-    )
-
-def _get_sample_cfg(wildcards):
-    sample_cfg = SAMPLES.get(wildcards.sample)
-    if sample_cfg is None:
-        raise KeyError(f"Sample '{wildcards.sample}' is missing from config.samples")
-    return sample_cfg
-
-def _get_cellranger_transcriptome(wildcards):
-    transcriptome = _cellranger_count_cfg().get('transcriptome')
-    if transcriptome:
-        return _abs_path(transcriptome)
-    return rules.CellRangerMkref.output.ref
-
 rule CellRangerMkref:
     output:
-        ref = directory(_cellranger_mkref_refdir()),
+        fasta = os.path.join(
+            config['QC_RNA']['CellRangerMkref']['output_dir'],
+            config['QC_RNA']['CellRangerMkref']['genome'],
+            "fasta/genome.fa"
+            )
     params:
-        outdir = lambda wildcards: _cellranger_mkref_outdir(),
-        genome = lambda wildcards: _cellranger_mkref_genome(),
-        fasta = lambda wildcards: _cellranger_mkref_fasta(),
-        genes = lambda wildcards: _cellranger_mkref_genes(),
+        cellranger = config['User']['cellranger'],
+        outdir = config['QC_RNA']['CellRangerMkref']['output_dir'],
+        genome = config['QC_RNA']['CellRangerMkref']['genome'],
+        fasta = config['QC_RNA']['CellRangerMkref']['fasta'],
+        genes = config['QC_RNA']['CellRangerMkref']['genes'],
     log:
         "logs/CellRangerMkref/mkref.log"
     benchmark:
@@ -74,7 +27,8 @@ rule CellRangerMkref:
         exec > {log} 2>&1
         mkdir -p {params.outdir}
         cd {params.outdir}
-        cellranger mkref \
+        rm -r {params.genome}
+        {params.cellranger} mkref \
             --genome={params.genome} \
             --fasta={params.fasta} \
             --genes={params.genes}
@@ -82,16 +36,24 @@ rule CellRangerMkref:
 
 rule CellRangerCount:
     input:
-        transcriptome = _get_cellranger_transcriptome,
+        fastq1 = f"{INPUT}/{{sample}}_S1_L001_R1_001.fastq.gz",
+        fastq2 = f"{INPUT}/{{sample}}_S1_L001_R2_001.fastq.gz",
+        transcriptome = os.path.join(
+            config['QC_RNA']['CellRangerMkref']['output_dir'],
+            config['QC_RNA']['CellRangerMkref']['genome'],
+            "fasta/genome.fa"
+            )
     output:
-        h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5",
+        h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
+        pipestance = directory("QC/RNA/CellRangerCount/{sample}"),
     params:
-        outdir = INPUT,
-        fastqs = _get_cellranger_fastqs,
-        fastq_sample_name = lambda wildcards: _get_sample_cfg(wildcards).get('cellranger_sample', wildcards.sample),
-        create_bam_flag = lambda wildcards: "--create-bam=true" if _cellranger_count_cfg().get('create_bam', False) else "--create-bam=false",
-        localmem = lambda wildcards: _cellranger_count_cfg().get('localmem', 64),
-    threads: lambda wildcards: _cellranger_count_cfg().get('localcores', 8)
+        cellranger = config['User']['cellranger'],
+        transcriptome = os.path.join(
+            config['QC_RNA']['CellRangerMkref']['output_dir'],
+            config['QC_RNA']['CellRangerMkref']['genome']),
+        fastq_dir = INPUT,
+        localmem = 64,
+    threads: 8
     log:
         "logs/CellRangerCount/{sample}.log"
     benchmark:
@@ -99,14 +61,14 @@ rule CellRangerCount:
     shell:
         r"""
         exec > {log} 2>&1
-        mkdir -p {params.outdir}
-        cd {params.outdir}
-        cellranger count \
+        rm -rf {output.pipestance}
+        {params.cellranger}  count \
             --id={wildcards.sample} \
-            --transcriptome={input.transcriptome} \
-            --fastqs={params.fastqs} \
-            --sample={params.fastq_sample_name} \
-            {params.create_bam_flag} \
+            --output-dir QC/RNA/CellRangerCount/{wildcards.sample} \
+            --transcriptome={params.transcriptome} \
+            --create-bam true \
+            --fastqs={params.fastq_dir} \
+            --sample={wildcards.sample} \
             --localcores={threads} \
             --localmem={params.localmem}
         """
@@ -115,7 +77,7 @@ ruleorder: PlottingAnnotationsManual > PlottingAnnotationsAutomatic
 
 rule CellbenderRemoveBackgroundRNA:
     input:
-        h5 = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5" if IS_LOCAL else f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5"
+        h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
     output:
         h5 = "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5",
         h5_filtered = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
@@ -155,7 +117,7 @@ rule CellbenderRemoveBackgroundRNA:
 
 rule CellbenderToH5ad:
     input:
-        cellbender_input = f"{INPUT}/{{sample}}/outs/raw_feature_bc_matrix.h5" if IS_LOCAL else f"{INPUT}/{{sample}}.raw_feature_bc_matrix.h5",
+        cellbender_input = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
         cellbender_output = "QC/RNA/{sample}/Cellbender/{sample}_cellbender_filtered.h5",
     output:
         merged = "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5ad",
@@ -248,7 +210,7 @@ rule MergeSamplesAnnData:
 rule BatchCorrection:
     input:
         h5ad = "QC/RNA/Merged/MergeSamplesAnnData/merged.filtered.h5ad",
-        markers =  f"{INPUT}/marker_genes.json",
+        markers =  config['QC_RNA']['BatchCorrection']['markers']
     output:
         h5ad = "QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
     params:
