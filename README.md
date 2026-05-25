@@ -57,6 +57,42 @@ pip install git+https://github.com/macs3-project/MACS.git
 pip install diptest
 ```
 
+## Running on a SLURM cluster
+
+MultiomePipe can run on a SLURM cluster by using the dedicated run script and Snakemake profile included in the repository.
+
+### Requirements
+
+Install the Snakemake SLURM executor plugin (once, in the `MultiomePipe` conda environment):
+```
+pip install snakemake-executor-plugin-slurm
+```
+
+### Configuration
+
+Edit `profile/slurm/config.yaml` to match your cluster:
+
+| Field | Description | Default |
+| --- | --- | --- |
+| `slurm_partition` | Partition/queue to submit jobs to | `cpu` |
+| `mem_mb` | Default memory per job (MB) | `8000` |
+| `runtime` | Default wall-clock limit (minutes) | `120` |
+| `cpus_per_task` | Default CPUs per job | `1` |
+| `jobs` | Max concurrent Slurm jobs | `50` |
+
+Individual rules can override these defaults by adding a `resources:` block (e.g. `mem_mb: 32000`).
+
+For rules that require a GPU (e.g. `CellbenderRemoveBackgroundRNA` with CUDA enabled), set `slurm_partition` to your GPU partition and add `slurm_extra: "--gres=gpu:1"` under `resources:` in the rule.
+
+### Run
+
+Edit `run_Multiomepipe_slurm.sh` to point `--configfile` to your config, then submit from the `MultiomePipe/` root directory:
+```
+bash run_Multiomepipe_slurm.sh
+```
+
+Snakemake itself runs on the login node and dispatches each rule as a separate Slurm job. You can run it inside a `screen` or `tmux` session to keep it alive after disconnecting.
+
 ## Examples
 ### ATAC-seq + RNA-seq: `config/config_pbmc_unsorted_3k`
 #### Prepare
