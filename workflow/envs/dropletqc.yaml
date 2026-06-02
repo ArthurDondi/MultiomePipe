@@ -8,4 +8,10 @@ dependencies:
   - r-argparse
   - r-matrix
   - bioconductor-dropletutils
+  - bioconductor-rsamtools
+  - bioconductor-genomicalignments
+  - bioconductor-genomicfeatures
+  - bioconductor-rtracklayer
+  - r-ks
+  - r-ggpubr
   - r-remotes
