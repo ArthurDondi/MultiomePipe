@@ -111,6 +111,9 @@ colnames(rho_df)[colnames(rho_df) == "rho"] <- "soupx_rho"
 cell_qc <- merge(cell_qc, rho_df, by = "barcode", all.x = TRUE)
 rownames(cell_qc) <- cell_qc$barcode
 cell_qc$soupx_rho[cell_qc$cell_status == "damaged_cell"] <- NA_real_
+if (!"nf_umi" %in% colnames(cell_qc)) {
+    cell_qc$nf_umi <- NA_real_
+}
 
 message("Writing corrected matrix to: ", file.path(args$output_dir, "corrected"))
 write10xCounts(

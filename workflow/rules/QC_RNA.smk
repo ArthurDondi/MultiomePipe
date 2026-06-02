@@ -4,10 +4,15 @@
 
 import os
 import json
+import warnings
 
 # Background correction method: "cellbender" (default) or "soupx" (DropletQC + SoupX)
 BG_CORRECTION = config.get("QC_RNA", {}).get("background_correction", "cellbender")
 if BG_CORRECTION == "soupx_dropletqc":
+    warnings.warn(
+        "QC_RNA.background_correction='soupx_dropletqc' is deprecated; use 'soupx' instead.",
+        DeprecationWarning
+    )
     BG_CORRECTION = "soupx"
 elif BG_CORRECTION not in {"cellbender", "soupx"}:
     raise ValueError(
@@ -31,6 +36,15 @@ if BG_CORRECTION == "soupx" and not DROPLETQC_CONFIG.get("bam_file"):
         "QC_RNA.DropletQC.bam_file must be set when "
         "QC_RNA.background_correction is 'soupx'."
     )
+
+
+def get_dropletqc_bam(wildcards):
+    bam = DROPLETQC_CONFIG.get("bam_file")
+    if not bam:
+        raise ValueError(
+            "QC_RNA.DropletQC.bam_file must be set before running the DropletQC rule."
+        )
+    return bam
 
 rule CellRangerMkref:
     output:
@@ -174,7 +188,7 @@ rule DropletQC:
     params:
         script = f"{workflow.basedir}/scripts/QC/DropletQC.R",
         output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
-        bam = DROPLETQC_CONFIG.get("bam_file", ""),
+        bam = get_dropletqc_bam,
         min_nf_umi = DROPLETQC_CONFIG.get("min_nf_umi", 0.6),
     threads: 4
     conda:
