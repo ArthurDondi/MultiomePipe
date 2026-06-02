@@ -11,6 +11,7 @@ suppressPackageStartupMessages({
     library(argparse)
     library(DropletUtils)
     library(SoupX)
+    library(Seurat)
 })
 
 parser <- ArgumentParser(description = "SoupX ambient correction after DropletQC")
@@ -68,7 +69,6 @@ filt_mat <- filt_mat[, keep, drop = FALSE]
 message("Cells remaining after DropletQC filter: ", ncol(filt_mat))
 
 message("Running quick Seurat clustering for SoupX...")
-suppressPackageStartupMessages(library(Seurat))
 
 so <- CreateSeuratObject(counts = filt_mat, min.cells = 3, min.features = 200)
 so <- NormalizeData(so, verbose = FALSE)
