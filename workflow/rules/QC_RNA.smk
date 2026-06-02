@@ -40,21 +40,6 @@ DROPLETQC_CONFIG = (
     or {}
 )
 
-if BG_CORRECTION == "soupx" and not DROPLETQC_CONFIG.get("bam_file"):
-    raise ValueError(
-        "QC_RNA.DropletQC.bam_file must be set when "
-        "QC_RNA.background_correction is 'soupx'."
-    )
-
-
-def get_dropletqc_bam(wildcards):
-    bam = DROPLETQC_CONFIG.get("bam_file")
-    if not bam:
-        raise ValueError(
-            "QC_RNA.DropletQC.bam_file must be set before running the DropletQC rule."
-        )
-    return bam
-
 rule CellRangerMkref:
     output:
         fasta = os.path.join(
@@ -192,12 +177,12 @@ rule CellbenderToH5ad:
 rule DropletQC:
     input:
         filtered_h5 = "QC/RNA/CellRangerCount/{sample}/outs/filtered_feature_bc_matrix.h5",
+        bam = "QC/RNA/CellRangerCount/{sample}/outs/possorted_genome_bam.bam",
     output:
         cell_qc = "QC/RNA/{sample}/DropletQC/cell_qc.tsv",
     params:
         script = f"{workflow.basedir}/scripts/QC/DropletQC.R",
         output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
-        bam = get_dropletqc_bam,
         min_nf_umi = DROPLETQC_CONFIG.get("min_nf_umi", 0.6),
     threads: 4
     conda:
@@ -213,7 +198,7 @@ rule DropletQC:
             --filtered_h5 {input.filtered_h5} \
             --output_dir {params.output_dir} \
             --min_nf_umi {params.min_nf_umi} \
-            --bam {params.bam}
+            --bam {input.bam}
         """
 
 rule SoupX:
