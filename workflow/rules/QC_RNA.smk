@@ -4,41 +4,14 @@
 
 import os
 import json
-import warnings
 
 # Background correction method: "cellbender" (default) or "soupx" (DropletQC + SoupX)
 BG_CORRECTION = config.get("QC_RNA", {}).get("background_correction", "cellbender")
-if BG_CORRECTION == "soupx_dropletqc":
-    warnings.warn(
-        "QC_RNA.background_correction='soupx_dropletqc' is deprecated; use 'soupx' instead.",
-        DeprecationWarning,
-        stacklevel=1
-    )
-    BG_CORRECTION = "soupx"
-elif BG_CORRECTION not in {"cellbender", "soupx"}:
+if BG_CORRECTION not in {"cellbender", "soupx"}:
     raise ValueError(
         f"Unsupported QC_RNA.background_correction '{BG_CORRECTION}'. "
         "Choose 'cellbender' or 'soupx'."
     )
-
-LEGACY_CONFIG = config.get("QC_RNA", {}).get("SoupXDropletQC")
-if LEGACY_CONFIG:
-    warnings.warn(
-        "QC_RNA.SoupXDropletQC is deprecated; use QC_RNA.DropletQC and QC_RNA.SoupX instead.",
-        DeprecationWarning,
-        stacklevel=1
-    )
-
-SOUPX_CONFIG = (
-    config.get("QC_RNA", {}).get("SoupX")
-    or LEGACY_CONFIG
-    or {}
-)
-DROPLETQC_CONFIG = (
-    config.get("QC_RNA", {}).get("DropletQC")
-    or LEGACY_CONFIG
-    or {}
-)
 
 rule CellRangerMkref:
     output:
@@ -80,6 +53,7 @@ rule CellRangerCount:
             )
     output:
         h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
+        bam = "QC/RNA/CellRangerCount/{sample}/outs/possorted_genome_bam.bam",
         pipestance = directory("QC/RNA/CellRangerCount/{sample}"),
     params:
         cellranger = config['User']['cellranger'],
@@ -183,7 +157,7 @@ rule DropletQC:
     params:
         script = f"{workflow.basedir}/scripts/QC/DropletQC.R",
         output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
-        min_nf_umi = DROPLETQC_CONFIG.get("min_nf_umi", 0.6),
+        min_nf_umi = config['QC_RNA']['DropletQC']['min_nf_umi'],
     threads: 4
     conda:
         "../envs/soupx_dropletqc.yaml"
@@ -213,10 +187,10 @@ rule SoupX:
     params:
         script = f"{workflow.basedir}/scripts/QC/SoupX.R",
         output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupX",
-        resolution = SOUPX_CONFIG.get("resolution", 1.0),
+        resolution = config['QC_RNA']['SoupX']['resolution'],
         contaminant_genes_arg = lambda wildcards: (
-            "--contaminant_genes " + " ".join(SOUPX_CONFIG.get("contaminant_genes") or [])
-            if SOUPX_CONFIG.get("contaminant_genes") else ""
+            "--contaminant_genes " + " ".join(config['QC_RNA']['SoupX']['contaminant_genes'])
+            if config['QC_RNA']['SoupX']['contaminant_genes'] else ""
         ),
     threads: 4
     conda:
