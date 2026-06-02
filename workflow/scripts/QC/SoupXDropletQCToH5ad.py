@@ -11,12 +11,12 @@ import os
 
 def initialize_parser():
     parser = argparse.ArgumentParser(
-        description="Convert SoupX/DropletQC R output to h5ad for downstream pipeline"
+        description="Convert SoupX output to h5ad for downstream pipeline"
     )
     parser.add_argument("--raw_h5", type=str, required=True,
                         help="Cell Ranger raw_feature_bc_matrix.h5 (for raw count layer)")
     parser.add_argument("--soupx_dir", type=str, required=True,
-                        help="Output directory from SoupXDropletQC.R")
+                        help="Output directory from SoupX.R")
     parser.add_argument("--output", type=str, required=True, help="Output h5ad path")
     parser.add_argument("--sample", type=str, required=True)
     return parser

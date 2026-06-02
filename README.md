@@ -12,7 +12,7 @@ The workflow has only been tested on human data and will require changes for oth
 MultiomePipe uses [Scanpy](https://scanpy.readthedocs.io/en/stable/index.html) to process, cluster, and annotate RNA-seq data. It was inspired by the [nf-core workflow scdownstream](https://github.com/nf-core/scdownstream),  the [single-cell best practices book](https://github.com/theislab/single-cell-best-practices), and [scanpy tutorials](https://scanpy.readthedocs.io/en/stable/tutorials/basics/clustering.html).
 
 Current steps:
-- Corrects for ambient RNA and identifies empty droplets using [CellBender](https://github.com/broadinstitute/CellBender)
+- Corrects ambient RNA either with [CellBender](https://github.com/broadinstitute/CellBender) or with DropletQC damaged-cell filtering followed by [SoupX](https://github.com/constantAmateur/SoupX)
 - Filter cells with fewer than (default 200) genes expressed
 - Filter out cells whose mitochondrial content deviates from the median by more than 5 MADs
 - Identify and remove doublets using [Scrublet](https://scanpy.readthedocs.io/en/stable/api/generated/scanpy.pp.scrublet.html)

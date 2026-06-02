@@ -4,9 +4,56 @@
 
 import os
 import json
+import warnings
 
-# Background correction method: "cellbender" (default) or "soupx_dropletqc"
+# Background correction method: "cellbender" (default) or "soupx" (DropletQC + SoupX)
 BG_CORRECTION = config.get("QC_RNA", {}).get("background_correction", "cellbender")
+if BG_CORRECTION == "soupx_dropletqc":
+    warnings.warn(
+        "QC_RNA.background_correction='soupx_dropletqc' is deprecated; use 'soupx' instead.",
+        DeprecationWarning,
+        stacklevel=1
+    )
+    BG_CORRECTION = "soupx"
+elif BG_CORRECTION not in {"cellbender", "soupx"}:
+    raise ValueError(
+        f"Unsupported QC_RNA.background_correction '{BG_CORRECTION}'. "
+        "Choose 'cellbender' or 'soupx'."
+    )
+
+LEGACY_CONFIG = config.get("QC_RNA", {}).get("SoupXDropletQC")
+if LEGACY_CONFIG:
+    warnings.warn(
+        "QC_RNA.SoupXDropletQC is deprecated; use QC_RNA.DropletQC and QC_RNA.SoupX instead.",
+        DeprecationWarning,
+        stacklevel=1
+    )
+
+SOUPX_CONFIG = (
+    config.get("QC_RNA", {}).get("SoupX")
+    or LEGACY_CONFIG
+    or {}
+)
+DROPLETQC_CONFIG = (
+    config.get("QC_RNA", {}).get("DropletQC")
+    or LEGACY_CONFIG
+    or {}
+)
+
+if BG_CORRECTION == "soupx" and not DROPLETQC_CONFIG.get("bam_file"):
+    raise ValueError(
+        "QC_RNA.DropletQC.bam_file must be set when "
+        "QC_RNA.background_correction is 'soupx'."
+    )
+
+
+def get_dropletqc_bam(wildcards):
+    bam = DROPLETQC_CONFIG.get("bam_file")
+    if not bam:
+        raise ValueError(
+            "QC_RNA.DropletQC.bam_file must be set before running the DropletQC rule."
+        )
+    return bam
 
 rule CellRangerMkref:
     output:
@@ -142,67 +189,85 @@ rule CellbenderToH5ad:
         --output {output.merged}
         """
 
-rule SoupXDropletQC:
+rule DropletQC:
+    input:
+        filtered_h5 = "QC/RNA/CellRangerCount/{sample}/outs/filtered_feature_bc_matrix.h5",
+    output:
+        cell_qc = "QC/RNA/{sample}/DropletQC/cell_qc.tsv",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/DropletQC.R",
+        output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
+        bam = get_dropletqc_bam,
+        min_nf_umi = DROPLETQC_CONFIG.get("min_nf_umi", 0.6),
+    threads: 4
+    conda:
+        "../envs/soupx_dropletqc.yaml"
+    log:
+        "logs/DropletQC/{sample}.log"
+    benchmark:
+        "benchmark/DropletQC/{sample}.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        Rscript {params.script} \
+            --filtered_h5 {input.filtered_h5} \
+            --output_dir {params.output_dir} \
+            --min_nf_umi {params.min_nf_umi} \
+            --bam {params.bam}
+        """
+
+rule SoupX:
     input:
         raw_h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
         filtered_h5 = "QC/RNA/CellRangerCount/{sample}/outs/filtered_feature_bc_matrix.h5",
+        cell_qc = "QC/RNA/{sample}/DropletQC/cell_qc.tsv",
     output:
-        cell_qc = "QC/RNA/{sample}/SoupXDropletQC/cell_qc.tsv",
-        soup_profile = "QC/RNA/{sample}/SoupXDropletQC/soup_profile.tsv",
-        matrix_dir = directory("QC/RNA/{sample}/SoupXDropletQC/corrected"),
+        cell_qc = "QC/RNA/{sample}/SoupX/cell_qc.tsv",
+        soup_profile = "QC/RNA/{sample}/SoupX/soup_profile.tsv",
+        matrix_dir = directory("QC/RNA/{sample}/SoupX/corrected"),
     params:
-        script = f"{workflow.basedir}/scripts/QC/SoupXDropletQC.R",
-        output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupXDropletQC",
-        bam = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("bam_file", "") or "",
-        contaminant_genes = lambda wildcards: " ".join(
-            config["QC_RNA"].get("SoupXDropletQC", {}).get("contaminant_genes") or []
-        ),
-        resolution = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("resolution", 1.0),
-        min_nf_umi = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("min_nf_umi", 0.6),
-        bam_arg = lambda wildcards: (
-            "--bam " + (config["QC_RNA"].get("SoupXDropletQC", {}).get("bam_file") or "")
-            if config["QC_RNA"].get("SoupXDropletQC", {}).get("bam_file") else ""
-        ),
+        script = f"{workflow.basedir}/scripts/QC/SoupX.R",
+        output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupX",
+        resolution = SOUPX_CONFIG.get("resolution", 1.0),
         contaminant_genes_arg = lambda wildcards: (
-            "--contaminant_genes " + " ".join(config["QC_RNA"].get("SoupXDropletQC", {}).get("contaminant_genes") or [])
-            if config["QC_RNA"].get("SoupXDropletQC", {}).get("contaminant_genes") else ""
+            "--contaminant_genes " + " ".join(SOUPX_CONFIG.get("contaminant_genes") or [])
+            if SOUPX_CONFIG.get("contaminant_genes") else ""
         ),
     threads: 4
     conda:
         "../envs/soupx_dropletqc.yaml"
     log:
-        "logs/SoupXDropletQC/{sample}.log"
+        "logs/SoupX/{sample}.log"
     benchmark:
-        "benchmark/SoupXDropletQC/{sample}.benchmark.txt"
+        "benchmark/SoupX/{sample}.benchmark.txt"
     shell:
         r"""
         exec > {log} 2>&1
         Rscript {params.script} \
             --raw_h5 {input.raw_h5} \
             --filtered_h5 {input.filtered_h5} \
+            --cell_qc {input.cell_qc} \
             --output_dir {params.output_dir} \
             --resolution {params.resolution} \
-            --min_nf_umi {params.min_nf_umi} \
-            {params.bam_arg} \
             {params.contaminant_genes_arg}
         """
 
-rule SoupXDropletQCToH5ad:
+rule SoupXToH5ad:
     input:
         raw_h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
-        soupx_dir = "QC/RNA/{sample}/SoupXDropletQC/corrected",
-        cell_qc = "QC/RNA/{sample}/SoupXDropletQC/cell_qc.tsv",
+        soupx_dir = "QC/RNA/{sample}/SoupX/corrected",
+        cell_qc = "QC/RNA/{sample}/SoupX/cell_qc.tsv",
     output:
-        h5ad = "QC/RNA/{sample}/SoupXDropletQC/{sample}_soupx.h5ad",
+        h5ad = "QC/RNA/{sample}/SoupX/{sample}_soupx.h5ad",
     params:
         script = f"{workflow.basedir}/scripts/QC/SoupXDropletQCToH5ad.py",
-        soupx_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupXDropletQC",
+        soupx_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupX",
     conda:
         "../envs/scverse.yaml"
     log:
-        "logs/SoupXDropletQCToH5ad/{sample}.log"
+        "logs/SoupXToH5ad/{sample}.log"
     benchmark:
-        "benchmark/SoupXDropletQCToH5ad/{sample}.benchmark.txt"
+        "benchmark/SoupXToH5ad/{sample}.benchmark.txt"
     shell:
         r"""
         exec > {log} 2>&1
@@ -217,7 +282,7 @@ rule RawFilteringRNA:
     input:
         h5ad = lambda wildcards: (
             f"{INPUT}/{wildcards.sample}.h5ad" if IS_FILTERED else
-            f"QC/RNA/{wildcards.sample}/SoupXDropletQC/{wildcards.sample}_soupx.h5ad" if BG_CORRECTION == "soupx_dropletqc" else
+            f"QC/RNA/{wildcards.sample}/SoupX/{wildcards.sample}_soupx.h5ad" if BG_CORRECTION == "soupx" else
             f"QC/RNA/{wildcards.sample}/Cellbender/{wildcards.sample}_cellbender.h5ad"
         ),
     output:
