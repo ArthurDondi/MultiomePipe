@@ -17,6 +17,7 @@ dependencies:
   - r-globals
   - r-vctrs
   - r-purrr
+  - r-rlang>=1.1.7
   - r-ks
   - r-ggpubr
   - r-remotes
