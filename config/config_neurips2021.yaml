@@ -60,7 +60,7 @@ IS_BATCHED: False
 QC_RNA:
   raw_data: True
 
-  # Background correction method: "cellbender" (default) or "soupx_dropletqc"
+  # Background correction method: "cellbender" (default) or "soupx" (DropletQC -> SoupX)
   background_correction: cellbender
 
   CellbenderRemoveBackgroundRNA:
