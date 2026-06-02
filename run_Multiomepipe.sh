@@ -19,6 +19,6 @@ snakemake \
     --use-conda \
     -p \
     --resources mem_mb=64000 nvidia_gpu=1 \
-    --rerun-triggers mtime params \
+    --rerun-triggers mtime params software-env \
     --conda-frontend conda 
 

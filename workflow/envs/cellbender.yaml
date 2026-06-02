@@ -3,7 +3,8 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python=3.9
+  - python=3.10
+  - pytorch=2.1
   - pip
   - pip:
       - git+https://github.com/broadinstitute/CellBender.git@4334e8966217c3591bf7c545f31ab979cdc6590d
