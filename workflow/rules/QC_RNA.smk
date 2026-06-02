@@ -21,8 +21,8 @@ elif BG_CORRECTION not in {"cellbender", "soupx"}:
         "Choose 'cellbender' or 'soupx'."
     )
 
-LEGACY_SOUPX_CONFIG = config.get("QC_RNA", {}).get("SoupXDropletQC")
-if LEGACY_SOUPX_CONFIG:
+LEGACY_CONFIG = config.get("QC_RNA", {}).get("SoupXDropletQC")
+if LEGACY_CONFIG:
     warnings.warn(
         "QC_RNA.SoupXDropletQC is deprecated; use QC_RNA.DropletQC and QC_RNA.SoupX instead.",
         DeprecationWarning,
@@ -31,12 +31,12 @@ if LEGACY_SOUPX_CONFIG:
 
 SOUPX_CONFIG = (
     config.get("QC_RNA", {}).get("SoupX")
-    or LEGACY_SOUPX_CONFIG
+    or LEGACY_CONFIG
     or {}
 )
 DROPLETQC_CONFIG = (
     config.get("QC_RNA", {}).get("DropletQC")
-    or LEGACY_SOUPX_CONFIG
+    or LEGACY_CONFIG
     or {}
 )
 
