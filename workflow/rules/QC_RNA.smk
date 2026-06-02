@@ -12,7 +12,7 @@ if BG_CORRECTION == "soupx_dropletqc":
     warnings.warn(
         "QC_RNA.background_correction='soupx_dropletqc' is deprecated; use 'soupx' instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=1
     )
     BG_CORRECTION = "soupx"
 elif BG_CORRECTION not in {"cellbender", "soupx"}:
@@ -26,7 +26,7 @@ if LEGACY_SOUPX_CONFIG:
     warnings.warn(
         "QC_RNA.SoupXDropletQC is deprecated; use QC_RNA.DropletQC and QC_RNA.SoupX instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=1
     )
 
 SOUPX_CONFIG = (
