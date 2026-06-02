@@ -63,7 +63,11 @@ def main():
     print("3. Adding per-cell QC metadata")
     start = timeit.default_timer()
     cell_qc = pd.read_csv(cell_qc_path, sep="\t", index_col="barcode")
-    # Align to adata barcodes (some barcodes may have been dropped by DropletQC)
+    # Align to adata barcodes; warn about any missing barcodes
+    missing = adata.obs_names.difference(cell_qc.index)
+    if len(missing) > 0:
+        print(f"   WARNING: {len(missing)} barcodes in adata not found in cell_qc.tsv; "
+              "their QC columns will be NaN.")
     cell_qc = cell_qc.reindex(adata.obs_names)
     for col in cell_qc.columns:
         adata.obs[col] = cell_qc[col].values

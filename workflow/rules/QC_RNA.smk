@@ -159,6 +159,14 @@ rule SoupXDropletQC:
         ),
         resolution = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("resolution", 1.0),
         min_nf_umi = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("min_nf_umi", 0.6),
+        bam_arg = lambda wildcards: (
+            "--bam " + (config["QC_RNA"].get("SoupXDropletQC", {}).get("bam_file") or "")
+            if config["QC_RNA"].get("SoupXDropletQC", {}).get("bam_file") else ""
+        ),
+        contaminant_genes_arg = lambda wildcards: (
+            "--contaminant_genes " + " ".join(config["QC_RNA"].get("SoupXDropletQC", {}).get("contaminant_genes") or [])
+            if config["QC_RNA"].get("SoupXDropletQC", {}).get("contaminant_genes") else ""
+        ),
     threads: 4
     conda:
         "../envs/soupx_dropletqc.yaml"
@@ -175,8 +183,8 @@ rule SoupXDropletQC:
             --output_dir {params.output_dir} \
             --resolution {params.resolution} \
             --min_nf_umi {params.min_nf_umi} \
-            $([ -n "{params.bam}" ] && echo "--bam {params.bam}") \
-            $([ -n "{params.contaminant_genes}" ] && echo "--contaminant_genes {params.contaminant_genes}")
+            {params.bam_arg} \
+            {params.contaminant_genes_arg}
         """
 
 rule SoupXDropletQCToH5ad:

@@ -20,10 +20,10 @@ def load_data(input_file,sample,donor):
         adata.X = adata.layers['cellbender']
     # Ensure layers['counts'] always holds raw counts for downstream use
     if "counts" not in adata.layers:
-        raw_layer = "raw" if "raw" in adata.layers else None
-        adata.layers["counts"] = (
-            adata.layers[raw_layer].copy() if raw_layer else adata.X.copy()
-        )
+        if "raw" in adata.layers:
+            adata.layers["counts"] = adata.layers["raw"].copy()
+        else:
+            adata.layers["counts"] = adata.X.copy()
     adata.var_names_make_unique()
     return adata
 

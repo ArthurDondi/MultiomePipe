@@ -182,7 +182,7 @@ write10xCounts(
 cell_qc_out <- cell_qc[, c("barcode", "soupx_rho", "cell_status"), drop = FALSE]
 if (run_dropletqc && "nf_umi" %in% colnames(cell_qc)) {
     cell_qc_out <- cbind(cell_qc_out,
-                         nf_umi = cell_qc[cell_qc_out$barcode, "nf_umi"])
+                         nf_umi = cell_qc[match(cell_qc_out$barcode, cell_qc$barcode), "nf_umi"])
 }
 cell_qc_path <- file.path(args$output_dir, "cell_qc.tsv")
 write.table(cell_qc_out, cell_qc_path, sep = "\t", quote = FALSE, row.names = FALSE)
