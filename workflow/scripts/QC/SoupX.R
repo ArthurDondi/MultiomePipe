@@ -49,6 +49,9 @@ filt_mat <- load_gex(args$filtered_h5)
 message("Loading DropletQC table: ", args$cell_qc)
 cell_qc <- read.table(args$cell_qc, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 rownames(cell_qc) <- cell_qc$barcode
+if (!"nf_umi" %in% colnames(cell_qc)) {
+    stop("DropletQC cell_qc.tsv is missing the required nf_umi column.")
+}
 
 keep <- cell_qc$barcode[cell_qc$cell_status == "cell"]
 if (length(keep) == 0) {
@@ -111,9 +114,6 @@ colnames(rho_df)[colnames(rho_df) == "rho"] <- "soupx_rho"
 cell_qc <- merge(cell_qc, rho_df, by = "barcode", all.x = TRUE)
 rownames(cell_qc) <- cell_qc$barcode
 cell_qc$soupx_rho[cell_qc$cell_status == "damaged_cell"] <- NA_real_
-if (!"nf_umi" %in% colnames(cell_qc)) {
-    stop("DropletQC cell_qc.tsv is missing the required nf_umi column.")
-}
 
 message("Writing corrected matrix to: ", file.path(args$output_dir, "corrected"))
 write10xCounts(
