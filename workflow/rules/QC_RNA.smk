@@ -160,7 +160,7 @@ rule DropletQC:
         min_nf_umi = config['QC_RNA']['DropletQC']['min_nf_umi'],
     threads: 4
     conda:
-        "../envs/soupx_dropletqc.yaml"
+        "../envs/dropletqc.yaml"
     log:
         "logs/DropletQC/{sample}.log"
     benchmark:
@@ -194,7 +194,7 @@ rule SoupX:
         ),
     threads: 4
     conda:
-        "../envs/soupx_dropletqc.yaml"
+        "../envs/soupx.yaml"
     log:
         "logs/SoupX/{sample}.log"
     benchmark:

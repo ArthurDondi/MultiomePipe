@@ -4,6 +4,9 @@
 
 suppressPackageStartupMessages({
     library(argparse)
+    if (!requireNamespace("DropletQC", quietly = TRUE)) {
+        remotes::install_github("powellgenomicslab/DropletQC", upgrade = "never")
+    }
     library(DropletQC)
     library(DropletUtils)
 })

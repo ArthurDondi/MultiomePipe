@@ -1,0 +1,11 @@
+name: dropletqc
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3
+  - r-argparse
+  - r-matrix
+  - bioconductor-dropletutils
+  - r-remotes
