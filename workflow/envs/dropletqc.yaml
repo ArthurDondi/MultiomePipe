@@ -13,6 +13,10 @@ dependencies:
   - bioconductor-genomicfeatures
   - bioconductor-rtracklayer
   - r-seurat
+  - r-hdf5r
+  - r-globals
+  - r-vctrs
+  - r-purrr
   - r-ks
   - r-ggpubr
   - r-remotes
