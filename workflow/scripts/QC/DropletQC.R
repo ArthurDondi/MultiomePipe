@@ -52,6 +52,7 @@ cell_qc <- data.frame(barcode = colnames(filt_mat), stringsAsFactors = FALSE)
 rownames(cell_qc) <- cell_qc$barcode
 
 nf_df <- as.data.frame(nf)
+colnames(nf_df)[colnames(nf_df) == "nuclear_fraction"] <- "nf_umi"
 nf_df$barcode <- rownames(nf_df)
 cell_qc <- merge(cell_qc, nf_df[, c("barcode", "nf_umi")], by = "barcode", all.x = TRUE)
 rownames(cell_qc) <- cell_qc$barcode
