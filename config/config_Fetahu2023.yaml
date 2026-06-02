@@ -45,7 +45,7 @@ General:
 QC_RNA:
   raw_data: True
 
-  # Background correction method: "cellbender" (default) or "soupx" (DropletQC -> SoupX)
+  # Background correction method: "soupx" (default, DropletQC -> SoupX) or "cellbender"
   background_correction: soupx
 
   CellbenderRemoveBackgroundRNA:

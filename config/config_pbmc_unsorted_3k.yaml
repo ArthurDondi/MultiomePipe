@@ -34,7 +34,7 @@ General:
 QC_RNA:
   raw_data: True
 
-  # Background correction method: "cellbender" (default) or "soupx" (DropletQC -> SoupX)
+  # Background correction method: "soupx" (default, DropletQC -> SoupX) or "cellbender"
   background_correction: cellbender
 
   CellbenderRemoveBackgroundRNA:
@@ -45,6 +45,13 @@ QC_RNA:
     checkpoint_mins: 30
     projected_ambient_count_threshold: 0.05
     empty_drop_training_fraction: 0.05
+
+  DropletQC:
+    min_nf_umi: 0.6       # DropletQC nuclear fraction threshold
+
+  SoupX:
+    contaminant_genes:    # known ambient genes to guide SoupX (null = auto)
+    resolution: 1.0       # Seurat clustering resolution for SoupX estimation
 
   RawFilteringRNA:
     min_genes: 200

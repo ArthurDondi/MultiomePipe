@@ -5,8 +5,8 @@
 import os
 import json
 
-# Background correction method: "cellbender" (default) or "soupx" (DropletQC + SoupX)
-BG_CORRECTION = config.get("QC_RNA", {}).get("background_correction", "cellbender")
+# Background correction method: "soupx" (default, DropletQC + SoupX) or "cellbender"
+BG_CORRECTION = config.get("QC_RNA", {}).get("background_correction", "soupx")
 if BG_CORRECTION not in {"cellbender", "soupx"}:
     raise ValueError(
         f"Unsupported QC_RNA.background_correction '{BG_CORRECTION}'. "
