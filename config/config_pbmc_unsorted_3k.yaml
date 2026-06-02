@@ -34,6 +34,9 @@ General:
 QC_RNA:
   raw_data: True
 
+  # Background correction method: "cellbender" (default) or "soupx_dropletqc"
+  background_correction: cellbender
+
   CellbenderRemoveBackgroundRNA:
     n_splits: 10
     cuda: '' # change to '--cuda' if CUDA is installed and working

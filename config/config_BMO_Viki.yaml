@@ -46,6 +46,9 @@ General:
 QC_RNA:
   raw_data: True
 
+  # Background correction method: "cellbender" (default) or "soupx_dropletqc"
+  background_correction: cellbender
+
   CellRangerMkref:
     genome: "GRCh38_GFP"
     fasta: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/hg38_plus_GFP.fa"
