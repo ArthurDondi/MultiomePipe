@@ -12,6 +12,7 @@ dependencies:
   - bioconductor-genomicalignments
   - bioconductor-genomicfeatures
   - bioconductor-rtracklayer
+  - r-seurat
   - r-ks
   - r-ggpubr
   - r-remotes
