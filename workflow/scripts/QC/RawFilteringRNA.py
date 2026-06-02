@@ -14,12 +14,16 @@ def load_data(input_file,sample,donor):
     # Adding sample and donor metadata
     adata.obs['sample'] = sample
     adata.obs['donor'] = donor
-    if "cellbender" in adata.layers: 
+    # Use corrected counts in X if a known corrected layer is present;
+    # otherwise X is already the corrected matrix (e.g. SoupX output).
+    if "cellbender" in adata.layers:
         adata.X = adata.layers['cellbender']
-    elif "counts" in adata.layers: 
-        adata.X = adata.layers['counts']
-    else:
-        adata.layers["counts"] = adata.X.copy()
+    # Ensure layers['counts'] always holds raw counts for downstream use
+    if "counts" not in adata.layers:
+        raw_layer = "raw" if "raw" in adata.layers else None
+        adata.layers["counts"] = (
+            adata.layers[raw_layer].copy() if raw_layer else adata.X.copy()
+        )
     adata.var_names_make_unique()
     return adata
 
@@ -156,7 +160,11 @@ def run_normalization_and_clustering(adata, sample, n_top_genes, is_filtered):
     
     QCs = ["log1p_total_counts", "n_genes_by_counts", "pct_counts_mt", "doublet_score",'S_score','G2M_score']
     if not is_filtered:
-        QCs.append("background_fraction")
+        # Accept contamination column from CellBender or SoupX
+        for col in ["background_fraction", "contamination_fraction", "soupx_rho"]:
+            if col in adata.obs.columns:
+                QCs.append(col)
+                break
     sc.pl.umap(adata,
                 color=QCs,
                 ncols=3,

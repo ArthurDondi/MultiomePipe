@@ -1,0 +1,14 @@
+name: soupx_dropletqc
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - r-base=4.3
+  - r-argparse
+  - r-matrix
+  - r-soupx
+  - r-seurat
+  - bioconductor-dropletutils
+  - bioconductor-dropletqc
+  - r-biocmanager

@@ -45,6 +45,9 @@ General:
 QC_RNA:
   raw_data: True
 
+  # Background correction method: "cellbender" (default) or "soupx_dropletqc"
+  background_correction: soupx_dropletqc
+
   CellbenderRemoveBackgroundRNA:
     n_splits: 10
     cuda: '--cuda' # change to '' if CUDA is not available
@@ -53,6 +56,15 @@ QC_RNA:
     checkpoint_mins: 30
     projected_ambient_count_threshold: 0.05
     empty_drop_training_fraction: 0.05
+
+  SoupXDropletQC:
+    bam_file: null        # path to BAM for DropletQC nuclear fraction (null = skip DropletQC)
+    contaminant_genes:    # known ambient genes to guide SoupX (null = auto)
+      - PHOX2B
+      - CHGA
+      - TH
+    resolution: 1.0       # Seurat clustering resolution for SoupX estimation
+    min_nf_umi: 0.6       # DropletQC nuclear fraction threshold (used only if bam_file is set)
 
   RawFilteringRNA:
     min_genes: 200

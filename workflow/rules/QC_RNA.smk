@@ -5,6 +5,9 @@
 import os
 import json
 
+# Background correction method: "cellbender" (default) or "soupx_dropletqc"
+BG_CORRECTION = config.get("QC_RNA", {}).get("background_correction", "cellbender")
+
 rule CellRangerMkref:
     output:
         fasta = os.path.join(
@@ -139,9 +142,76 @@ rule CellbenderToH5ad:
         --output {output.merged}
         """
 
+rule SoupXDropletQC:
+    input:
+        raw_h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
+        filtered_h5 = "QC/RNA/CellRangerCount/{sample}/outs/filtered_feature_bc_matrix.h5",
+    output:
+        cell_qc = "QC/RNA/{sample}/SoupXDropletQC/cell_qc.tsv",
+        soup_profile = "QC/RNA/{sample}/SoupXDropletQC/soup_profile.tsv",
+        matrix_dir = directory("QC/RNA/{sample}/SoupXDropletQC/corrected"),
+    params:
+        script = f"{workflow.basedir}/scripts/QC/SoupXDropletQC.R",
+        output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupXDropletQC",
+        bam = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("bam_file", "") or "",
+        contaminant_genes = lambda wildcards: " ".join(
+            config["QC_RNA"].get("SoupXDropletQC", {}).get("contaminant_genes") or []
+        ),
+        resolution = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("resolution", 1.0),
+        min_nf_umi = lambda wildcards: config["QC_RNA"].get("SoupXDropletQC", {}).get("min_nf_umi", 0.6),
+    threads: 4
+    conda:
+        "../envs/soupx_dropletqc.yaml"
+    log:
+        "logs/SoupXDropletQC/{sample}.log"
+    benchmark:
+        "benchmark/SoupXDropletQC/{sample}.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        Rscript {params.script} \
+            --raw_h5 {input.raw_h5} \
+            --filtered_h5 {input.filtered_h5} \
+            --output_dir {params.output_dir} \
+            --resolution {params.resolution} \
+            --min_nf_umi {params.min_nf_umi} \
+            $([ -n "{params.bam}" ] && echo "--bam {params.bam}") \
+            $([ -n "{params.contaminant_genes}" ] && echo "--contaminant_genes {params.contaminant_genes}")
+        """
+
+rule SoupXDropletQCToH5ad:
+    input:
+        raw_h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
+        soupx_dir = "QC/RNA/{sample}/SoupXDropletQC/corrected",
+        cell_qc = "QC/RNA/{sample}/SoupXDropletQC/cell_qc.tsv",
+    output:
+        h5ad = "QC/RNA/{sample}/SoupXDropletQC/{sample}_soupx.h5ad",
+    params:
+        script = f"{workflow.basedir}/scripts/QC/SoupXDropletQCToH5ad.py",
+        soupx_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/SoupXDropletQC",
+    conda:
+        "../envs/scverse.yaml"
+    log:
+        "logs/SoupXDropletQCToH5ad/{sample}.log"
+    benchmark:
+        "benchmark/SoupXDropletQCToH5ad/{sample}.benchmark.txt"
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python -W ignore {params.script} \
+            --raw_h5 {input.raw_h5} \
+            --soupx_dir {params.soupx_dir} \
+            --output {output.h5ad} \
+            --sample {wildcards.sample}
+        """
+
 rule RawFilteringRNA:
     input:
-        h5ad = lambda wildcards: f"{INPUT}/{{sample}}.h5ad" if IS_FILTERED else "QC/RNA/{sample}/Cellbender/{sample}_cellbender.h5ad",
+        h5ad = lambda wildcards: (
+            f"{INPUT}/{wildcards.sample}.h5ad" if IS_FILTERED else
+            f"QC/RNA/{wildcards.sample}/SoupXDropletQC/{wildcards.sample}_soupx.h5ad" if BG_CORRECTION == "soupx_dropletqc" else
+            f"QC/RNA/{wildcards.sample}/Cellbender/{wildcards.sample}_cellbender.h5ad"
+        ),
     output:
         h5ad = "QC/RNA/{sample}/Filtering/{sample}_filtered.h5ad",
     params:
