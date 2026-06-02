@@ -1,4 +1,4 @@
-name: soupx_dropletqc
+name: soupx
 channels:
   - conda-forge
   - bioconda
@@ -10,5 +10,3 @@ dependencies:
   - r-soupx
   - r-seurat
   - bioconductor-dropletutils
-  - bioconductor-dropletqc
-  - r-biocmanager
