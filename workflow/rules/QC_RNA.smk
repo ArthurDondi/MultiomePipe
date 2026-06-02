@@ -174,7 +174,7 @@ rule DropletQC:
     params:
         script = f"{workflow.basedir}/scripts/QC/DropletQC.R",
         output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
-        bam = DROPLETQC_CONFIG["bam_file"],
+        bam = DROPLETQC_CONFIG.get("bam_file", ""),
         min_nf_umi = DROPLETQC_CONFIG.get("min_nf_umi", 0.6),
     threads: 4
     conda:

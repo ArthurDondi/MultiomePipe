@@ -58,7 +58,7 @@ QC_RNA:
     empty_drop_training_fraction: 0.05
 
   DropletQC:
-    bam_file: null        # path to BAM for DropletQC nuclear fraction (required when background_correction: soupx)
+    bam_file: /path/to/possorted_genome_bam.bam  # required when background_correction: soupx
     min_nf_umi: 0.6       # DropletQC nuclear fraction threshold
 
   SoupX:
