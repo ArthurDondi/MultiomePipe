@@ -4,9 +4,14 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - r-base=4.3
+  - r-base=4.4
   - r-argparse
   - r-matrix
   - r-soupx
   - r-seurat
+  - r-hdf5r
+  - r-globals
+  - r-vctrs
+  - r-purrr
+  - r-rlang>=1.1.7
   - bioconductor-dropletutils
