@@ -132,7 +132,7 @@ message("Written cell QC to: ", cell_qc_path)
 soup_prof <- sc_obj$soupProfile[order(-sc_obj$soupProfile$est), ]
 soup_prof$gene <- rownames(soup_prof)
 soup_path <- file.path(args$output_dir, "soup_profile.tsv")
-write.table(soup_prof[, c("gene", "est", "cnts")], soup_path,
+write.table(soup_prof[, c("gene", "est", "counts")], soup_path,
             sep = "\t", quote = FALSE, row.names = FALSE)
 message("Written soup profile to: ", soup_path)
 
