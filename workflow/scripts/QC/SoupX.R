@@ -85,11 +85,12 @@ message("Creating SoupX SoupChannel object...")
 sc_obj <- SoupChannel(tod = raw_mat, toc = filt_mat)
 sc_obj <- setClusters(sc_obj, clusters)
 
+non_exp_genes <- NULL
 if (!is.null(args$contaminant_genes) && length(args$contaminant_genes) > 0) {
     present_genes <- intersect(args$contaminant_genes, rownames(filt_mat))
     if (length(present_genes) > 0) {
         message("Using user-supplied contaminant genes: ", paste(present_genes, collapse = ", "))
-        sc_obj <- setContaminationFraction(sc_obj, useToEst = present_genes)
+        non_exp_genes <- list(present_genes)
     } else {
         warning("None of the provided contaminant genes found in matrix – using autoEstCont")
     }
@@ -97,7 +98,7 @@ if (!is.null(args$contaminant_genes) && length(args$contaminant_genes) > 0) {
 
 message("Estimating contamination with autoEstCont...")
 sc_obj <- tryCatch(
-    autoEstCont(sc_obj, verbose = FALSE),
+    autoEstCont(sc_obj, nonExpressedGeneList = non_exp_genes, verbose = FALSE),
     error = function(e) {
         message("autoEstCont failed (", conditionMessage(e), "), falling back to fixed rho = 0.05")
         setContaminationFraction(sc_obj, 0.05)
