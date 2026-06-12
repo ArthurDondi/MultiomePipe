@@ -70,10 +70,12 @@ QC_RNA:
     empty_drop_training_fraction: 0.05
 
   DropletQC:
-    min_nf_umi: 0.6       # DropletQC nuclear fraction threshold
+    assay_type: scrna          # 'scrna' (whole cells) or 'snrna' (nuclei / Multiome)
+    seurat_resolution: 0.5     # resolution for quick cell-type labelling
+    min_umi_for_nf: 100        # skip NF computation for very low-count barcodes
 
   SoupX:
-    contaminant_genes:    # known ambient genes to guide SoupX (null = auto)
+    contaminant_genes:    # known ambient genes to plot
       - PHOX2B
       - CHGA
       - TH
@@ -84,7 +86,7 @@ QC_RNA:
     min_cells: 5
     n_mads: 5
     doublet_threshold: .25
-    n_top_genes: 2000
+    n_top_genes: 8000
 
   BatchCorrection:
     markers: /home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/marker_genes.json

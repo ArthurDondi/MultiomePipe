@@ -150,14 +150,19 @@ rule CellbenderToH5ad:
 
 rule DropletQC:
     input:
+        raw_h5      = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
         filtered_h5 = "QC/RNA/CellRangerCount/{sample}/outs/filtered_feature_bc_matrix.h5",
-        bam = "QC/RNA/CellRangerCount/{sample}/outs/possorted_genome_bam.bam",
+        bam         = "QC/RNA/CellRangerCount/{sample}/outs/possorted_genome_bam.bam",
     output:
-        cell_qc = "QC/RNA/{sample}/DropletQC/cell_qc.tsv",
+        cell_qc            = "QC/RNA/{sample}/DropletQC/cell_qc.tsv",
+        cellranger_compare = "QC/RNA/{sample}/DropletQC/cellranger_comparison.tsv",
+        barcode_compare    = "QC/RNA/{sample}/DropletQC/barcode_comparison.tsv",
     params:
-        script = f"{workflow.basedir}/scripts/QC/DropletQC.R",
-        output_dir = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
-        min_nf_umi = config['QC_RNA']['DropletQC']['min_nf_umi'],
+        script             = f"{workflow.basedir}/scripts/QC/DropletQC.R",
+        output_dir         = lambda wildcards: f"QC/RNA/{wildcards.sample}/DropletQC",
+        assay_type         = config['QC_RNA']['DropletQC']['assay_type'],
+        seurat_resolution  = config['QC_RNA']['DropletQC'].get('seurat_resolution', 0.5),
+        min_umi_for_nf     = config['QC_RNA']['DropletQC'].get('min_umi_for_nf', 100),
     threads: 4
     conda:
         "../envs/dropletqc.yaml"
@@ -169,10 +174,13 @@ rule DropletQC:
         r"""
         exec > {log} 2>&1
         Rscript {params.script} \
-            --filtered_h5 {input.filtered_h5} \
-            --output_dir {params.output_dir} \
-            --min_nf_umi {params.min_nf_umi} \
-            --bam {input.bam}
+            --raw_h5           {input.raw_h5} \
+            --filtered_h5      {input.filtered_h5} \
+            --bam              {input.bam} \
+            --output_dir       {params.output_dir} \
+            --assay_type       {params.assay_type} \
+            --seurat_resolution {params.seurat_resolution} \
+            --min_umi_for_nf   {params.min_umi_for_nf}
         """
 
 rule SoupX:

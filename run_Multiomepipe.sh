@@ -17,7 +17,7 @@ snakemake \
     --configfile config/config_BMO_Viki.yaml \
     --cores 8 \
     --use-conda \
-    -p \
+    -p --until RawFilteringRNA \
     --resources mem_mb=64000 nvidia_gpu=1 \
     --rerun-triggers mtime params software-env \
     --conda-frontend conda 

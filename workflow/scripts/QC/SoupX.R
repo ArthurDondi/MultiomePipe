@@ -12,6 +12,7 @@ suppressPackageStartupMessages({
     library(DropletUtils)
     library(SoupX)
     library(Seurat)
+    library(ggplot2)
 })
 
 parser <- ArgumentParser(description = "SoupX ambient correction after DropletQC")
@@ -61,8 +62,16 @@ if (length(keep) == 0) {
 
 missing_keep <- setdiff(keep, colnames(filt_mat))
 if (length(missing_keep) > 0) {
-    stop("Some DropletQC barcodes were not found in the filtered matrix: ",
-         paste(head(missing_keep, 5), collapse = ", "))
+    warning(sprintf(
+        "%d DropletQC 'cell' barcodes not present in the Cell Ranger filtered matrix and will be skipped: %s%s",
+        length(missing_keep),
+        paste(head(missing_keep, 5), collapse = ", "),
+        if (length(missing_keep) > 5) " ..." else ""
+    ))
+    keep <- intersect(keep, colnames(filt_mat))
+    if (length(keep) == 0) {
+        stop("No DropletQC 'cell' barcodes overlap the filtered matrix; cannot continue.")
+    }
 }
 
 filt_mat <- filt_mat[, keep, drop = FALSE]
@@ -77,6 +86,7 @@ so <- ScaleData(so, verbose = FALSE)
 so <- RunPCA(so, npcs = 30, verbose = FALSE)
 so <- FindNeighbors(so, dims = 1:30, verbose = FALSE)
 so <- FindClusters(so, resolution = args$resolution, verbose = FALSE)
+so <- RunUMAP(so, dims = 1:30, verbose = FALSE)
 
 clusters <- setNames(as.character(so$seurat_clusters), colnames(so))
 message(sprintf("Found %d clusters (resolution = %.1f)", length(unique(clusters)), args$resolution))
@@ -84,37 +94,65 @@ message(sprintf("Found %d clusters (resolution = %.1f)", length(unique(clusters)
 message("Creating SoupX SoupChannel object...")
 sc_obj <- SoupChannel(tod = raw_mat, toc = filt_mat)
 sc_obj <- setClusters(sc_obj, clusters)
+umap_coords <- Embeddings(so, "umap")
+sc_obj <- setDR(sc_obj, umap_coords[colnames(filt_mat), , drop = FALSE])
 
-non_exp_genes <- NULL
+plot_contaminant_genes <- NULL
 if (!is.null(args$contaminant_genes) && length(args$contaminant_genes) > 0) {
-    present_genes <- intersect(args$contaminant_genes, rownames(filt_mat))
-    if (length(present_genes) > 0) {
-        message("Using user-supplied contaminant genes: ", paste(present_genes, collapse = ", "))
-        non_exp_genes <- list(present_genes)
+    plot_contaminant_genes <- intersect(args$contaminant_genes, rownames(filt_mat))
+    if (length(plot_contaminant_genes) > 0) {
+        message("Contaminant genes for plotChangeMap: ", paste(plot_contaminant_genes, collapse = ", "))
     } else {
-        warning("None of the provided contaminant genes found in matrix – using autoEstCont")
+        warning("None of the provided contaminant genes found in matrix")
     }
 }
 
 message("Estimating contamination with autoEstCont...")
-sc_obj <- tryCatch(
-    autoEstCont(sc_obj, nonExpressedGeneList = non_exp_genes, verbose = FALSE),
-    error = function(e) {
-        message("autoEstCont failed (", conditionMessage(e), "), falling back to fixed rho = 0.05")
-        setContaminationFraction(sc_obj, 0.05)
-    }
-)
+sc_obj <- tryCatch({
+    sc_obj <- autoEstCont(sc_obj, verbose = FALSE)
+    rho_auto <- median(sc_obj$metaData$rho, na.rm = TRUE)
+    message(sprintf("rho (autoEstCont): %.4f (%.2f%%)", rho_auto, rho_auto * 100))
+    sc_obj
+}, error = function(e) {
+    message("Contamination estimation failed (", conditionMessage(e), "), falling back to fixed rho = 0.05")
+    setContaminationFraction(sc_obj, 0.05)
+})
 
 message("Adjusting counts...")
 corrected_mat <- adjustCounts(sc_obj, roundToInt = TRUE, verbose = FALSE)
 message(sprintf("SoupX corrected %d genes x %d cells", nrow(corrected_mat), ncol(corrected_mat)))
 
-rho_df <- sc_obj$metaData[, "rho", drop = FALSE]
-rho_df$barcode <- rownames(rho_df)
-colnames(rho_df)[colnames(rho_df) == "rho"] <- "soupx_rho"
-cell_qc <- merge(cell_qc, rho_df, by = "barcode", all.x = TRUE)
-rownames(cell_qc) <- cell_qc$barcode
-cell_qc$soupx_rho[cell_qc$cell_status == "damaged_cell"] <- NA_real_
+rho_col <- intersect(c("rho", "contFrac"), colnames(sc_obj$metaData))[1]
+if (is.na(rho_col)) {
+    warning("Could not find rho/contFrac column in SoupX metaData; soupx_rho will be NA")
+    cell_qc$soupx_rho <- NA_real_
+} else {
+    rho_df <- sc_obj$metaData[, rho_col, drop = FALSE]
+    rho_df$barcode <- rownames(rho_df)
+    colnames(rho_df)[1] <- "soupx_rho"
+    cell_qc <- merge(cell_qc, rho_df, by = "barcode", all.x = TRUE)
+    rownames(cell_qc) <- cell_qc$barcode
+    cell_qc$soupx_rho[cell_qc$cell_status == "damaged_cell"] <- NA_real_
+}
+
+message("Generating plotChangeMap QC plots...")
+plot_dir <- file.path(args$output_dir, "plots")
+dir.create(plot_dir, showWarnings = FALSE)
+
+plot_genes <- unique(c("MALAT1", plot_contaminant_genes))
+plot_genes <- intersect(plot_genes, rownames(corrected_mat))
+
+for (gene in plot_genes) {
+    tryCatch({
+        p <- plotChangeMap(sc_obj, corrected_mat, gene) +
+            ggtitle(sprintf("%s – SoupX correction", gene))
+        ggsave(file.path(plot_dir, sprintf("changeMap_%s.pdf", gene)),
+               plot = p, width = 6, height = 5)
+    }, error = function(e) {
+        warning(sprintf("plotChangeMap failed for %s: %s", gene, conditionMessage(e)))
+    })
+}
+message(sprintf("Written plotChangeMap PDF(s) to: %s", plot_dir))
 
 message("Writing corrected matrix to: ", file.path(args$output_dir, "corrected"))
 write10xCounts(
