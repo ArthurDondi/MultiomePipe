@@ -44,8 +44,9 @@ rule CellRangerMkref:
 
 rule CellRangerCount:
     input:
-        fastq1 = f"{INPUT}/{{sample}}_S1_L001_R1_001.fastq.gz",
-        fastq2 = f"{INPUT}/{{sample}}_S1_L001_R2_001.fastq.gz",
+        # FASTQs are pre-existing raw inputs living in a per-sample directory
+        # (config: samples.<sample>.fastq_dir). They are not produced by the
+        # workflow, so only the transcriptome is tracked as a rule dependency.
         transcriptome = os.path.join(
             config['QC_RNA']['CellRangerMkref']['output_dir'],
             config['QC_RNA']['CellRangerMkref']['genome'],
@@ -60,7 +61,10 @@ rule CellRangerCount:
         transcriptome = os.path.join(
             config['QC_RNA']['CellRangerMkref']['output_dir'],
             config['QC_RNA']['CellRangerMkref']['genome']),
-        fastq_dir = INPUT,
+        # Per-sample FASTQ directory and CellRanger --sample prefix, with the
+        # global input_dir / wildcard sample as fallbacks for older configs.
+        fastq_dir = lambda wildcards: SAMPLES[wildcards.sample].get('fastq_dir', INPUT),
+        cr_sample = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
         localmem = 64,
     threads: 8
     log:
@@ -77,7 +81,7 @@ rule CellRangerCount:
             --transcriptome={params.transcriptome} \
             --create-bam true \
             --fastqs={params.fastq_dir} \
-            --sample={wildcards.sample} \
+            --sample={params.cr_sample} \
             --localcores={threads} \
             --localmem={params.localmem}
         """
@@ -258,6 +262,7 @@ rule RawFilteringRNA:
         script = f"{workflow.basedir}/scripts/QC/RawFilteringRNA.py",
         plotdir = lambda wildcards: f"QC/RNA/{wildcards.sample}/Plots",
         donor = lambda wildcards: config['samples'][wildcards.sample]['donor'],
+        dataset = lambda wildcards: config['samples'][wildcards.sample].get('dataset', 'NA'),
         min_genes = config['QC_RNA']['RawFilteringRNA']['min_genes'],
         min_cells = config['QC_RNA']['RawFilteringRNA']['min_cells'],
         n_mads = config['QC_RNA']['RawFilteringRNA']['n_mads'],
@@ -278,6 +283,7 @@ rule RawFilteringRNA:
         --output {output.h5ad} \
         --sample {wildcards.sample} \
         --donor {params.donor} \
+        --dataset {params.dataset} \
         --plotdir {params.plotdir} \
         --min_genes {params.min_genes} \
         --min_cells {params.min_cells} \
@@ -298,6 +304,7 @@ rule MergeSamplesAnnData:
         samples = " ".join(SAMPLES.keys()),
         donor_key = config['General']['donor_key'],
         sample_key = config['General']['sample_key'],
+        dataset_key = config['General'].get('dataset_key', 'dataset'),
         is_filtered = "--is_filtered" if IS_FILTERED else ""
     conda:
         "../envs/scverse.yaml"
@@ -314,7 +321,8 @@ rule MergeSamplesAnnData:
         --samples {params.samples} \
         --plotdir {params.plotdir} \
         --donor_key {params.donor_key} \
-        --sample_key {params.sample_key} {params.is_filtered}
+        --sample_key {params.sample_key} \
+        --dataset_key {params.dataset_key} {params.is_filtered}
         """
 
 rule BatchCorrection:
@@ -329,6 +337,7 @@ rule BatchCorrection:
         celltype_key = config['General']['celltype_key'],
         donor_key = config['General']['donor_key'],
         sample_key = config['General']['sample_key'],
+        dataset_key = config['General'].get('dataset_key', 'dataset'),
         is_filtered = "--is_filtered" if IS_FILTERED else ""
     conda:
         "../envs/scverse.yaml"
@@ -346,7 +355,8 @@ rule BatchCorrection:
         --plotdir {params.plotdir} \
         {params.is_filtered} \
         --donor_key {params.donor_key} \
-        --sample_key {params.sample_key}
+        --sample_key {params.sample_key} \
+        --dataset_key {params.dataset_key}
         """
 
 
