@@ -183,6 +183,9 @@ rule ComputeQC:
         tss_window = config["QC_ATAC"]['ComputeQC']['tss_window'],
         tss_min_norm = config["QC_ATAC"]['ComputeQC']['tss_min_norm'],
     threads: config["QC_ATAC"]['ComputeQC']['threads']
+    resources:
+        mem_mb = 32000,
+        runtime = 360,    # 6h
     log:
         "logs/ComputeQC/{sample}.log"
     benchmark:
@@ -247,6 +250,9 @@ rule CreateATACCountMatrix:
         min_fragments_per_region = config["QC_ATAC"]['CreateATACCountMatrix']['min_fragments_per_region'],
         min_cells_per_region = config["QC_ATAC"]['CreateATACCountMatrix']['min_cells_per_region'],
     threads: config["QC_ATAC"]['CreateATACCountMatrix']['threads']
+    resources:
+        mem_mb = 32000,
+        runtime = 360,    # 6h
     log:
         "logs/CreateATACCountMatrix/{sample}.log"
     benchmark:
@@ -285,6 +291,9 @@ rule RunLDAModels:
         eta = config["QC_ATAC"]['RunLDAModels']['eta'],
         eta_by_topic = config["QC_ATAC"]['RunLDAModels']['eta_by_topic'],
     threads: config["QC_ATAC"]['RunLDAModels']['n_cpus']
+    resources:
+        mem_mb = 32000,
+        runtime = 1440,   # 24h (mediumq)
     log:
         "logs/RunLDAModels/{sample}.log"
     benchmark:

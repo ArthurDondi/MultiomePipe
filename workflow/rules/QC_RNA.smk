@@ -67,6 +67,9 @@ rule CellRangerCount:
         cr_sample = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
         localmem = 64,
     threads: 8
+    resources:
+        mem_mb = 72000,
+        runtime = 1440,   # 24h (mediumq)
     log:
         "logs/CellRangerCount/{sample}.log"
     benchmark:
@@ -104,7 +107,9 @@ rule CellbenderRemoveBackgroundRNA:
         total_droplets_included=lambda wildcards: 3 * config['QC_RNA']['CellbenderRemoveBackgroundRNA']['expected-cells'],
     threads: 1
     resources:
-        nvidia_gpu=1
+        nvidia_gpu=1,
+        mem_mb = 32000,
+        runtime = 720,    # 12h
     conda:
         "../envs/cellbender.yaml"
     log:
@@ -168,6 +173,9 @@ rule DropletQC:
         seurat_resolution  = config['QC_RNA']['DropletQC'].get('seurat_resolution', 0.5),
         min_umi_for_nf     = config['QC_RNA']['DropletQC'].get('min_umi_for_nf', 100),
     threads: 4
+    resources:
+        mem_mb = 32000,
+        runtime = 360,    # 6h
     conda:
         "../envs/dropletqc.yaml"
     log:
@@ -205,6 +213,9 @@ rule SoupX:
             if config['QC_RNA']['SoupX']['contaminant_genes'] else ""
         ),
     threads: 4
+    resources:
+        mem_mb = 32000,
+        runtime = 360,    # 6h
     conda:
         "../envs/soupx.yaml"
     log:
@@ -339,6 +350,9 @@ rule BatchCorrection:
         sample_key = config['General']['sample_key'],
         dataset_key = config['General'].get('dataset_key', 'dataset'),
         is_filtered = "--is_filtered" if IS_FILTERED else ""
+    resources:
+        mem_mb = 32000,
+        runtime = 360,    # 6h
     conda:
         "../envs/scverse.yaml"
     log:
