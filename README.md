@@ -117,3 +117,57 @@ snakemake -s workflow/Snakefile --configfile config/config_Fetahu2023.yaml --cor
 
 #### Manual annotation
 See above.
+
+## Running on a SLURM cluster
+
+MultiomePipe can be submitted to a SLURM cluster using the profile in
+`profiles/slurm/config.yaml` (Snakemake 8 executor plugin).
+
+### One-time setup
+Install the SLURM executor plugin into the MultiomePipe conda env:
+```
+pip install snakemake-executor-plugin-slurm
+```
+
+### Edit the profile for your cluster
+Open `profiles/slurm/config.yaml` and adjust the partitions / QoS to match your
+site. The defaults target the queues:
+- `shortq` (12h) for the default of most rules,
+- `mediumq` (2d) for `CellRangerCount` and `RunLDAModels`,
+- `gpu` for `CellbenderRemoveBackgroundRNA` (requests `--gres=gpu:1`).
+
+On this cluster the `--qos` must match the partition, which is why each
+partition is paired with its matching `--qos=` in `slurm_extra`. `runtime` is
+expressed in **minutes**. Per-rule `mem_mb` / `runtime` are declared on the
+rules in `workflow/rules/*.smk`; the profile only routes heavy rules to the
+right queue. Tune `mem_mb` / `runtime` per rule if your data is larger.
+
+### Submit
+From `MultiomePipe/` (point input/output dirs in your config at a shared
+filesystem such as `/nobackup/<group>/<user>/...`, not your home), first do a
+dry run on the login node:
+```
+snakemake -s workflow/Snakefile \
+    --configfile config/<your_config>.yaml \
+    --workflow-profile profiles/slurm \
+    -n          # dry run; drop -n to submit interactively
+```
+
+To run the whole workflow unattended, submit the controller batch job
+`run_Multiomepipe_slurm.sh`, which runs Snakemake on `longq` (30d) and submits
+every rule as its own SLURM job via the profile above:
+```
+sbatch run_Multiomepipe_slurm.sh config/<your_config>.yaml
+```
+Edit the `#SBATCH` log paths / `--mail-user` at the top of that script for your
+account before submitting.
+
+### Caveats
+- **CellBender parallelism:** the `CellbenderRemoveBackgroundRNA` rule writes a
+  `ckpt.tar.gz` in the shared working directory, so running multiple CellBender
+  jobs concurrently can clobber each other. Until this is refactored to a
+  per-job temp dir, keep CellBender effectively serial (e.g. submit one sample
+  at a time, or set `--cores`/`jobs` low for that step).
+- **Tools on compute nodes:** `cellranger` (path in `config['User']['cellranger']`)
+  and Mallet must be available / `module load`-able on the compute nodes, not
+  only the login node.

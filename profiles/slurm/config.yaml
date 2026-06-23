@@ -1,0 +1,48 @@
+# Snakemake 8 workflow profile for SLURM submission.
+#
+# Usage (from MultiomePipe/):
+#   pip install snakemake-executor-plugin-slurm   # one time
+#   snakemake -s workflow/Snakefile \
+#       --configfile config/<your_config>.yaml \
+#       --workflow-profile profiles/slurm
+#
+# Notes
+# - SLURM `qos` must match the partition on this cluster, so every partition is
+#   paired with its matching `--qos=` in slurm_extra.
+# - `runtime` is in MINUTES (not the D-HH:MM:SS strings shown in the queue table).
+# - `mem_mb` and `runtime` declared on individual rules (in workflow/rules/*.smk)
+#   take precedence over `default-resources`; `set-resources` below takes
+#   precedence over both and is used only to route heavy rules to the right queue.
+
+executor: slurm
+use-conda: true
+conda-frontend: conda
+jobs: 50                # max SLURM jobs in flight at once (stay under group limits)
+latency-wait: 60
+printshellcmds: true
+rerun-triggers:
+  - mtime
+  - params
+  - software-env
+
+# Applied to every rule unless the rule (or set-resources) overrides it.
+# Default queue is shortq (12h) which fits the great majority of rules.
+default-resources:
+  slurm_partition: "shortq"
+  slurm_extra: "'--qos=shortq'"
+  mem_mb: 8000
+  runtime: 120          # minutes
+
+# Per-rule queue routing for the heavy rules. mem_mb / runtime for these are
+# declared on the rules themselves; here we only send them to the right queue
+# (and request the GPU for CellBender).
+set-resources:
+  CellRangerCount:
+    slurm_partition: "mediumq"
+    slurm_extra: "'--qos=mediumq'"
+  CellbenderRemoveBackgroundRNA:
+    slurm_partition: "gpu"
+    slurm_extra: "'--qos=gpu --gres=gpu:1'"
+  RunLDAModels:
+    slurm_partition: "mediumq"
+    slurm_extra: "'--qos=mediumq'"
