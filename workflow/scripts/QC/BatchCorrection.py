@@ -84,6 +84,7 @@ def initialize_parser():
     parser.add_argument('--is_filtered', action='store_true')
     parser.add_argument('--sample_key', type=str, required=True)
     parser.add_argument('--donor_key', type=str, required=True)
+    parser.add_argument('--dataset_key', type=str, default=None)
     return parser
 
 # -----------------------------
@@ -99,6 +100,7 @@ def main():
     plotdir = args.plotdir
     donor_key = args.donor_key
     sample_key = args.sample_key
+    dataset_key = args.dataset_key
     is_filtered = args.is_filtered
 
     sc.settings.figdir = plotdir
@@ -112,9 +114,12 @@ def main():
 
     print("2. Batch correction (Harmony)")
     start = timeit.default_timer()
-    if (len(adata.obs[donor_key].unique()) > 1) | (len(adata.obs[sample_key].unique()) > 1):
-        sce.pp.harmony_integrate(adata, 
-                                key=[donor_key,sample_key],
+    # Use dataset of origin (if present) + donor + sample as the batch covariates.
+    batch_keys = [k for k in [dataset_key, donor_key, sample_key]
+                  if k is not None and k in adata.obs.columns]
+    if any(len(adata.obs[k].unique()) > 1 for k in batch_keys):
+        sce.pp.harmony_integrate(adata,
+                                key=batch_keys,
                                 theta=3.0,           # default ~2; smaller = weaker integration
                                 sigma=0.1)
     stop = timeit.default_timer()

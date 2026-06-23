@@ -9,11 +9,14 @@ import json
 # -----------------------------
 # Functions
 # -----------------------------
-def load_data(input_file,sample,donor):
+def load_data(input_file,sample,donor,dataset=None):
     adata = ad.io.read_h5ad(input_file)
     # Adding sample and donor metadata
     adata.obs['sample'] = sample
     adata.obs['donor'] = donor
+    # Adding dataset-of-origin metadata (used as a batch covariate downstream)
+    if dataset is not None:
+        adata.obs['dataset'] = dataset
     # Use corrected counts in X if a known corrected layer is present;
     # otherwise X is already the corrected matrix (e.g. SoupX output).
     if "cellbender" in adata.layers:
@@ -180,6 +183,7 @@ def initialize_parser():
     parser.add_argument('--output', type=str, required=True, help="h5ad")
     parser.add_argument('--sample', type=str, required=True)
     parser.add_argument('--donor', type=str, required=True)
+    parser.add_argument('--dataset', type=str, default=None, help="dataset of origin (batch covariate)")
     parser.add_argument('--plotdir', type=str, required=True)
     parser.add_argument('--min_genes', type=int, default=100)
     parser.add_argument('--min_cells', type=int, default=3)
@@ -200,6 +204,7 @@ def main():
     output_file = args.output
     sample = args.sample
     donor = args.donor
+    dataset = args.dataset
     plotdir = args.plotdir
     min_genes = args.min_genes
     min_cells = args.min_cells
@@ -213,7 +218,7 @@ def main():
     # 1. Load data
     print("1. Load data")
     start = timeit.default_timer()
-    adata = load_data(input_file,sample,donor)
+    adata = load_data(input_file,sample,donor,dataset)
     stop = timeit.default_timer()
     print(f"Loaded data in {round(stop-start,2)}s")
 

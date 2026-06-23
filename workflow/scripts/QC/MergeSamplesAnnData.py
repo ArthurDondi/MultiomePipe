@@ -9,7 +9,7 @@ import json
 # -----------------------------
 # Functions
 # -----------------------------
-def merge_data(input_files, samples, donor_key, sample_key):
+def merge_data(input_files, samples, donor_key, sample_key, dataset_key=None):
 
     adatas = [ad.io.read_h5ad(f) for f in sorted(input_files)]
     #Adding sample name to cell names — use sorted(samples) to match sorted file order
@@ -28,11 +28,16 @@ def merge_data(input_files, samples, donor_key, sample_key):
     )
     print("Concat done")
     del adatas
-    adata_concat.X = adata_concat.layers['cellbender']
+    # The cellbender background-correction path stores corrected counts in a
+    # 'cellbender' layer; the soupx path already has corrected counts in X.
+    if 'cellbender' in adata_concat.layers:
+        adata_concat.X = adata_concat.layers['cellbender']
 
-    # Ensure both donor and sample columns use a consistent sorted categorical order
+    # Ensure batch columns use a consistent sorted categorical order
     # so that colour palettes are assigned identically in every UMAP panel.
-    for col in [donor_key, sample_key]:
+    for col in [donor_key, sample_key, dataset_key]:
+        if col is None:
+            continue
         if col in adata_concat.obs.columns:
             adata_concat.obs[col] = pd.Categorical(
                 adata_concat.obs[col],
@@ -116,6 +121,7 @@ def initialize_parser():
     parser.add_argument('--plotdir', type=str, required=True)
     parser.add_argument('--sample_key', type=str, required=True)
     parser.add_argument('--donor_key', type=str, required=True)
+    parser.add_argument('--dataset_key', type=str, default=None)
     parser.add_argument('--is_filtered', action='store_true')
     return parser
 
@@ -132,6 +138,7 @@ def main():
     plotdir = args.plotdir
     donor_key = args.donor_key
     sample_key = args.sample_key
+    dataset_key = args.dataset_key
     is_filtered = args.is_filtered
 
     sc.settings.figdir = plotdir
@@ -139,7 +146,7 @@ def main():
     # 1. Merge data
     print("1. Merge data")
     start = timeit.default_timer()
-    adata = merge_data(input_files, samples, donor_key, sample_key)
+    adata = merge_data(input_files, samples, donor_key, sample_key, dataset_key)
     stop = timeit.default_timer()
     print(f"Loaded data in {round(stop-start,2)}s")
 
