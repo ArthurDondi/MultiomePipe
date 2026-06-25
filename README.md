@@ -136,11 +136,14 @@ site. The defaults target the queues:
 - `mediumq` (2d) for `CellRangerCount` and `RunLDAModels`,
 - `gpu` for `CellbenderRemoveBackgroundRNA` (requests `--gres=gpu:1`).
 
-On this cluster the `--qos` must match the partition, which is why each
-partition is paired with its matching `--qos=` in `slurm_extra`. `runtime` is
-expressed in **minutes**. Per-rule `mem_mb` / `runtime` are declared on the
-rules in `workflow/rules/*.smk`; the profile only routes heavy rules to the
-right queue. Tune `mem_mb` / `runtime` per rule if your data is larger.
+On this cluster the qos must match the partition, which is why each partition is
+paired with its matching `qos` resource. QoS is set via the dedicated `qos`
+resource (and GPUs via `gres`) rather than `slurm_extra`, because the SLURM
+executor plugin manages those itself and rejects `--qos` / `--gres` passed
+through `slurm_extra`. `runtime` is expressed in **minutes**. Per-rule `mem_mb` /
+`runtime` are declared on the rules in `workflow/rules/*.smk`; the profile only
+routes heavy rules to the right queue. Tune `mem_mb` / `runtime` per rule if your
+data is larger.
 
 ### Submit
 From `MultiomePipe/` (point input/output dirs in your config at a shared
