@@ -1,4 +1,4 @@
-# Snakemake 8 workflow profile for SLURM submission.
+# Snakemake workflow profile for SLURM submission.
 #
 # Usage (from MultiomePipe/):
 #   pip install snakemake-executor-plugin-slurm   # one time
@@ -7,8 +7,11 @@
 #       --workflow-profile profiles/slurm
 #
 # Notes
-# - SLURM `qos` must match the partition on this cluster, so every partition is
-#   paired with its matching `--qos=` in slurm_extra.
+# - QoS is set via the dedicated `qos` resource (NOT via slurm_extra): the SLURM
+#   executor plugin manages QoS itself and rejects `--qos` inside slurm_extra.
+#   This cluster requires qos to match the partition, so each partition is
+#   paired with its matching qos below.
+# - GPUs are requested via the `gres` resource, not slurm_extra.
 # - `runtime` is in MINUTES (not the D-HH:MM:SS strings shown in the queue table).
 # - `mem_mb` and `runtime` declared on individual rules (in workflow/rules/*.smk)
 #   take precedence over `default-resources`; `set-resources` below takes
@@ -29,7 +32,7 @@ rerun-triggers:
 # Default queue is shortq (12h) which fits the great majority of rules.
 default-resources:
   slurm_partition: "shortq"
-  slurm_extra: "'--qos=shortq'"
+  qos: "shortq"
   mem_mb: 8000
   runtime: 120          # minutes
 
@@ -39,10 +42,11 @@ default-resources:
 set-resources:
   CellRangerCount:
     slurm_partition: "mediumq"
-    slurm_extra: "'--qos=mediumq'"
+    qos: "mediumq"
   CellbenderRemoveBackgroundRNA:
     slurm_partition: "gpu"
-    slurm_extra: "'--qos=gpu --gres=gpu:1'"
+    qos: "gpu"
+    gres: "gpu:1"
   RunLDAModels:
     slurm_partition: "mediumq"
-    slurm_extra: "'--qos=mediumq'"
+    qos: "mediumq"
