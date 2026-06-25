@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 
 # Run
@@ -15,6 +16,15 @@ IS_FILTERED = config['IS_FILTERED']
 IS_ANNOTATED = config['IS_ANNOTATED']
 IS_BATCHED = config['IS_BATCHED']
 
+
+# Constrain the `sample` wildcard to the configured sample names. Without this,
+# `{sample}` defaults to a greedy `.+` that matches `/`, so a request for a file
+# nested under a directory() output (e.g. the CellRanger pipestance file
+# QC/RNA/CellRangerCount/<sample>/outs/filtered_feature_bc_matrix.h5) gets
+# matched with `sample` swallowing the sub-path. That bogus binding then breaks
+# input functions that look up SAMPLES[wildcards.sample] (KeyError).
+wildcard_constraints:
+    sample="|".join(re.escape(s) for s in SAMPLES),
 
 
 def get_CTYPES(samples):

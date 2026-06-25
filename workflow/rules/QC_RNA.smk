@@ -54,6 +54,10 @@ rule CellRangerCount:
             )
     output:
         h5 = "QC/RNA/CellRangerCount/{sample}/outs/raw_feature_bc_matrix.h5",
+        # Declared explicitly because DropletQC / SoupX consume it directly;
+        # otherwise Snakemake can only reach it through the pipestance
+        # directory() output, which forces a greedy {sample} match.
+        filtered_h5 = "QC/RNA/CellRangerCount/{sample}/outs/filtered_feature_bc_matrix.h5",
         bam = "QC/RNA/CellRangerCount/{sample}/outs/possorted_genome_bam.bam",
         pipestance = directory("QC/RNA/CellRangerCount/{sample}"),
     params:
