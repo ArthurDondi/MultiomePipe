@@ -1,13 +1,12 @@
 #!/bin/bash
-#SBATCH --output /nobackup/lab_taschner-mandl/arthurdondi/MultiomePipe_%j.log
-#SBATCH --error  /nobackup/lab_taschner-mandl/arthurdondi/MultiomePipe_%j.err
-#SBATCH --job-name=MultiomePipe
-#SBATCH --partition=longq      # 30d limit: long enough for the whole workflow
-#SBATCH --qos=longq            # qos must match the partition
+#SBATCH --output /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/logs/MultiomePipe_%j.log
+#SBATCH --error  /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/logs/MultiomePipe_%j.err
+#SBATCH --job-name=MultiomePipe 
+#SBATCH --partition=shortq      # 30d limit: long enough for the whole workflow
+#SBATCH --qos=shortq            # qos must match the partition
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1      # this job is only the Snakemake controller
-#SBATCH --time=20-00:00:00     # 20 days (within longq's 30d limit)
 #SBATCH --mem=8000             # controller is light; rules get their own jobs
 #SBATCH --mail-type=end
 #SBATCH --mail-user=arthur.dondi@cemm.at
@@ -28,7 +27,7 @@
 
 set -euo pipefail
 
-CONFIG="${1:-config/config_BMO_Viki.yaml}"
+CONFIG="${1:-config/config_BMO_combined.yaml}"
 
 echo "======================"
 echo "submit dir : $SLURM_SUBMIT_DIR"
@@ -44,4 +43,4 @@ snakemake \
     --workflow-profile profiles/slurm \
     --jobs 50 \
     --rerun-triggers mtime params software-env \
-    -p
+    -p -n --until CellRangerCount

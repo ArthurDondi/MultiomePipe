@@ -6,8 +6,8 @@
 # Change those values to yours
 User:
   input_dir: /nobackup/lab_taschner-mandl/arthurdondi/data            # fallback root; per-sample fastq_dir below is authoritative
-  output_dir: /nobackup/lab_taschner-mandl/arthurdondi/BMO_combined
-  cellranger: /home/arthur_d/bioinf_isilon/Research/HALBRITTER/zHalbritter_TaschnerMandl/wernig-zorc.sara/tools/cellranger-9.0.1/cellranger
+  output_dir: /nobackup/lab_taschner-mandl/arthurdondi/BMO
+  cellranger: /nobackup/lab_taschner-mandl/arthurdondi/src/cellranger-10.0.0/cellranger
 
 # Change any of those to True if you want to run it, else False
 Run:
@@ -183,12 +183,12 @@ QC_RNA:
 
   CellRangerMkref:
     genome: "GRCh38_GFP"
-    fasta: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/hg38_plus_GFP.fa"
-    genes: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/hg38_plus_GFP.gtf"
-    output_dir: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/cellranger_ref"
+    fasta: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/hg38_plus_GFP.fa"
+    genes: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/hg38_plus_GFP.gtf"
+    output_dir: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/cellranger_ref"
 
   CellRangerCount:
-    transcriptome: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/cellranger_ref/GRCh38_GFP"
+    transcriptome: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/cellranger_ref/GRCh38_GFP"
     localcores: 8
     localmem: 64
     create_bam: false
@@ -221,14 +221,14 @@ QC_RNA:
     n_top_genes: 8000
 
   BatchCorrection:
-    markers: /home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/users/arthur_d/ressources/references/hg38/BMO/marker_genes.json
+    markers: /nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/marker_genes.json
 
   PlottingAnnotations:
     doublets: "Doublets 'Low quality'"
     leiden_res: "leiden_res_1.00"
 
   LabelTransfer:
-    reference_h5ad: "/home/arthur_d/bioinf_isilon/Research/TASCHNERMANDL/Internal/data/frenz-wiessner2024.scRNA/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad"
+    reference_h5ad: "/nobackup/lab_taschner-mandl/arthurdondi/data/frenz-wiessner2024/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad"
     reference_columns:
       - "author_cell_type_coarse_grained"
       - "author_cell_type"
