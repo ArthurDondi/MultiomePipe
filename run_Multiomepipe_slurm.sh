@@ -30,10 +30,12 @@ set -euo pipefail
 CONFIG="${1:-config/config_BMO_combined.yaml}"
 
 echo "======================"
-echo "submit dir : $SLURM_SUBMIT_DIR"
-echo "job name   : $SLURM_JOB_NAME"
-echo "partition  : $SLURM_JOB_PARTITION"
-echo "job id     : $SLURM_JOB_ID"
+# SLURM_* are only set when launched via sbatch; default to N/A so a direct
+# `./run_Multiomepipe_slurm.sh` run doesn't trip `set -u`.
+echo "submit dir : ${SLURM_SUBMIT_DIR:-N/A}"
+echo "job name   : ${SLURM_JOB_NAME:-N/A}"
+echo "partition  : ${SLURM_JOB_PARTITION:-N/A}"
+echo "job id     : ${SLURM_JOB_ID:-N/A}"
 echo "config     : $CONFIG"
 echo "======================"
 
