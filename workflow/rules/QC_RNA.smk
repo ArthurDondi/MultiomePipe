@@ -196,7 +196,8 @@ rule DropletQC:
             --output_dir       {params.output_dir} \
             --assay_type       {params.assay_type} \
             --seurat_resolution {params.seurat_resolution} \
-            --min_umi_for_nf   {params.min_umi_for_nf}
+            --min_umi_for_nf   {params.min_umi_for_nf} \
+            --cores            {threads}
         """
 
 rule SoupX:

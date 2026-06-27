@@ -12,6 +12,10 @@ dependencies:
   - bioconductor-genomicalignments
   - bioconductor-genomicfeatures
   - bioconductor-rtracklayer
+  - bioconductor-genomicranges
+  - bioconductor-genomeinfodb
+  - bioconductor-biocgenerics
+  - bioconductor-s4vectors
   - r-seurat
   - r-hdf5r
   - r-globals
@@ -20,4 +24,14 @@ dependencies:
   - r-rlang>=1.1.7
   - r-ks
   - r-ggpubr
+  # DropletQC runtime dependencies, installed as prebuilt conda binaries so the
+  # post-deploy GitHub install needs no source compilation and the parallel
+  # nuclear_fraction_tags() future workers can attach every namespace.
+  - r-future
+  - r-furrr
+  - r-dplyr
+  - r-ggplot2
+  - r-stringr
+  - r-mclust
+  - r-patchwork
   - r-remotes

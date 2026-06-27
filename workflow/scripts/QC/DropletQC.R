@@ -8,9 +8,9 @@ suppressPackageStartupMessages({
     library(argparse)
     library(Seurat)
     library(Matrix)
-    if (!requireNamespace("DropletQC", quietly = TRUE)) {
-        remotes::install_github("powellgenomicslab/DropletQC", upgrade = "never")
-    }
+    # DropletQC is installed at conda-env build time by
+    # workflow/envs/dropletqc.post-deploy.sh, so it (and its parallel future
+    # workers) can attach the namespace without a fragile runtime install.
     library(DropletQC)
 })
 
@@ -29,6 +29,10 @@ parser$add_argument("--seurat_resolution", type = "double", default = 0.5,
                     help = "Seurat clustering resolution for cell-type labels (default: 0.5)")
 parser$add_argument("--min_umi_for_nf", type = "integer", default = 100,
                     help = "Min UMI count to attempt nuclear fraction computation (default: 100)")
+parser$add_argument("--cores", type = "integer", default = 1,
+                    help = paste("Worker processes for nuclear_fraction_tags()",
+                                 "(default: 1). Should match the rule's allocated",
+                                 "threads to avoid oversubscribing the node."))
 args <- parser$parse_args()
 
 if (!args$assay_type %in% c("scrna", "snrna")) {
@@ -68,6 +72,7 @@ message(sprintf("[2/6] Computing nuclear fraction for %d barcodes (UMI >= %d) ..
 nf_result <- nuclear_fraction_tags(
     bam      = args$bam,
     barcodes = bcs_for_nf,
+    cores    = args$cores,
     verbose  = FALSE
 )
 
