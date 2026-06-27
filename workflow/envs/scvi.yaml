@@ -2,6 +2,14 @@ name: scvi
 # GPU environment for scVI / scANVI batch correction (BatchCorrection rule when
 # QC_RNA.BatchCorrection.method is "scvi" or "scanvi"). Includes the scanpy stack
 # so the same script can also do neighbours / UMAP / Leiden / plotting.
+#
+# Pinned for this cluster's GPU nodes:
+#   GPU    : NVIDIA L4 (Ada Lovelace, compute capability sm_89, 24 GB)
+#   Driver : 535.216.01  -> supports up to CUDA 12.2
+# PyTorch is installed from the official CUDA 12.1 wheels (cu121): they run on
+# any >=12.x driver (so fine on 12.2), support sm_89, and bundle their own CUDA
+# runtime, so the env solves/installs without needing a GPU on the build node.
+# If you move to newer GPUs, bump the cu121 index + torch version accordingly.
 channels:
   - conda-forge
   - bioconda
@@ -9,16 +17,10 @@ dependencies:
   - python=3.11
   - pip
 
-  # GPU PyTorch. conda-forge ships CUDA-enabled builds of `pytorch-gpu`.
-  # If the solver resolves a CPU-only build on your cluster, pin the CUDA
-  # variant explicitly to match your driver, e.g.
-  #   - pytorch-gpu=2.3.*=cuda120*
-  - pytorch-gpu=2.3.*
-
   # scanpy stack (HVG selection, neighbours, UMAP, Leiden, plotting)
   - scanpy=1.10.4
   - anndata=0.11.3
-  - numpy<2
+  - numpy<2                    # torch 2.3 wheels are built against numpy 1.x
   - pandas=2.2.*
   - scipy=1.13.*
   - scikit-learn=1.5.*
@@ -31,5 +33,7 @@ dependencies:
   - pyyaml
 
   - pip:
-      # scvi-tools 1.2.x is compatible with the conda-provided torch 2.3.
+      # CUDA 12.1 PyTorch wheels (compatible with driver 535 / CUDA 12.2, sm_89).
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      - torch==2.3.1
       - scvi-tools==1.2.2
