@@ -17,7 +17,7 @@ Current steps:
 - Filter out cells whose mitochondrial content deviates from the median by more than 5 MADs
 - Identify and remove doublets using [Scrublet](https://scanpy.readthedocs.io/en/stable/api/generated/scanpy.pp.scrublet.html)
 - Normalize counts with median count depth normalization
-- Correct for batches using [Harmony](https://scanpy.readthedocs.io/en/stable/generated/scanpy.external.pp.harmony_integrate.html)
+- Correct for batches using [Harmony](https://scanpy.readthedocs.io/en/stable/generated/scanpy.external.pp.harmony_integrate.html) (default), or [scVI / scANVI](https://docs.scvi-tools.org/) — set `QC_RNA.BatchCorrection.method` to `harmony`, `scvi`, or `scanvi` (the latter two run on the `gpu` queue; `scanvi` always trains scVI first and refines it with per-dataset reference labels)
 - Embedding using UMAP and clustering using Leiden
 - Plots user-provided marker genes for manual cell annotation
 

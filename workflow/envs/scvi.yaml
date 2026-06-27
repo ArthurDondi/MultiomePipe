@@ -1,0 +1,35 @@
+name: scvi
+# GPU environment for scVI / scANVI batch correction (BatchCorrection rule when
+# QC_RNA.BatchCorrection.method is "scvi" or "scanvi"). Includes the scanpy stack
+# so the same script can also do neighbours / UMAP / Leiden / plotting.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pip
+
+  # GPU PyTorch. conda-forge ships CUDA-enabled builds of `pytorch-gpu`.
+  # If the solver resolves a CPU-only build on your cluster, pin the CUDA
+  # variant explicitly to match your driver, e.g.
+  #   - pytorch-gpu=2.3.*=cuda120*
+  - pytorch-gpu=2.3.*
+
+  # scanpy stack (HVG selection, neighbours, UMAP, Leiden, plotting)
+  - scanpy=1.10.4
+  - anndata=0.11.3
+  - numpy<2
+  - pandas=2.2.*
+  - scipy=1.13.*
+  - scikit-learn=1.5.*
+  - scikit-misc=0.3.*          # required for seurat_v3 HVG (loess)
+  - leidenalg=0.10.2
+  - python-igraph=0.11.*
+  - matplotlib-base=3.9.*
+  - seaborn=0.13.*
+  - h5py=3.11.*
+  - pyyaml
+
+  - pip:
+      # scvi-tools 1.2.x is compatible with the conda-provided torch 2.3.
+      - scvi-tools==1.2.2

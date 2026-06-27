@@ -13,6 +13,46 @@ if BG_CORRECTION not in {"cellbender", "soupx"}:
         "Choose 'cellbender' or 'soupx'."
     )
 
+# Batch correction method: "harmony" (default, CPU) or "scvi"/"scanvi" (GPU).
+# scvi/scanvi run on the `gpu` SLURM queue and use the scvi-tools conda env.
+_BC_CFG = config.get("QC_RNA", {}).get("BatchCorrection", {})
+BC_METHOD = _BC_CFG.get("method", "harmony").lower()
+if BC_METHOD not in {"harmony", "scvi", "scanvi"}:
+    raise ValueError(
+        f"Unsupported QC_RNA.BatchCorrection.method '{BC_METHOD}'. "
+        "Choose 'harmony', 'scvi' or 'scanvi'."
+    )
+BC_USE_GPU = BC_METHOD in {"scvi", "scanvi"}
+BC_ENV = "../envs/scvi.yaml" if BC_USE_GPU else "../envs/scverse.yaml"
+# Wall-clock for the BatchCorrection job (minutes). GPU runs default to 4h on
+# the gpu queue; harmony keeps the historical 6h. Override via config.
+BC_RUNTIME = int(_BC_CFG.get("runtime", 240 if BC_USE_GPU else 360))
+
+
+def _bc_scvi_args(cfg):
+    """CLI flags for scVI/scANVI hyperparameters and label sources."""
+    if not BC_USE_GPU:
+        return ""
+    scvi = cfg.get("scvi", {}) or {}
+    parts = [f"--method {BC_METHOD}"]
+    parts.append(f"--n_hvg {scvi.get('n_hvg', 2000)}")
+    parts.append(f"--n_latent {scvi.get('n_latent', 30)}")
+    if scvi.get("max_epochs") is not None:
+        parts.append(f"--scvi_max_epochs {scvi['max_epochs']}")
+    if BC_METHOD == "scanvi":
+        scanvi = cfg.get("scanvi", {}) or {}
+        parts.append(f"--scanvi_max_epochs {scanvi.get('max_epochs', 20)}")
+        parts.append(f"--unlabeled_category '{scanvi.get('unlabeled_category', 'Unknown')}'")
+        sources = scanvi.get("label_sources", []) or []
+        if sources:
+            ds = " ".join(str(s["dataset"]) for s in sources)
+            refs = " ".join(str(s["reference_h5ad"]) for s in sources)
+            cols = " ".join(str(s["label_column"]) for s in sources)
+            parts.append(f"--label_datasets {ds}")
+            parts.append(f"--label_refs {refs}")
+            parts.append(f"--label_columns {cols}")
+    return " ".join(parts)
+
 rule CellRangerMkref:
     output:
         fasta = os.path.join(
@@ -353,12 +393,21 @@ rule BatchCorrection:
         donor_key = config['General']['donor_key'],
         sample_key = config['General']['sample_key'],
         dataset_key = config['General'].get('dataset_key', 'dataset'),
-        is_filtered = "--is_filtered" if IS_FILTERED else ""
+        is_filtered = "--is_filtered" if IS_FILTERED else "",
+        # method switch (+ scvi/scanvi hyperparameters & label sources); empty
+        # for harmony, which then runs with the script's default method.
+        method_args = _bc_scvi_args(_BC_CFG),
     resources:
         mem_mb = 32000,
-        runtime = 360,    # 6h
+        runtime = BC_RUNTIME,
+        # Route scvi/scanvi to the GPU queue; harmony stays on the default
+        # (shortq) queue. gres/nvidia_gpu are falsy (ignored) when not on GPU.
+        slurm_partition = "gpu" if BC_USE_GPU else "shortq",
+        qos = "gpu" if BC_USE_GPU else "shortq",
+        gres = "gpu:1" if BC_USE_GPU else "",
+        nvidia_gpu = 1 if BC_USE_GPU else 0,
     conda:
-        "../envs/scverse.yaml"
+        BC_ENV
     log:
         "logs/BatchCorrection/merged.log"
     benchmark:
@@ -374,7 +423,8 @@ rule BatchCorrection:
         {params.is_filtered} \
         --donor_key {params.donor_key} \
         --sample_key {params.sample_key} \
-        --dataset_key {params.dataset_key}
+        --dataset_key {params.dataset_key} \
+        {params.method_args}
         """
 
 
