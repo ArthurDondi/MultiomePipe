@@ -324,6 +324,12 @@ rule RawFilteringRNA:
         doublet_threshold = config['QC_RNA']['RawFilteringRNA']['doublet_threshold'],
         n_top_genes = config['QC_RNA']['RawFilteringRNA']['n_top_genes'],
         is_filtered = "--is_filtered" if IS_FILTERED else ""
+    resources:
+        # Scrublet (sc.pp.scrublet) ~doubles the matrix to simulate doublets,
+        # so peak RAM scales with cell count; the 8 GB profile default OOM-kills
+        # large samples (e.g. cell-line organoids). 32 GB covers the big ones.
+        mem_mb = 32000,
+        runtime = 240,    # 4h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -333,7 +339,7 @@ rule RawFilteringRNA:
     shell:
         r"""
         exec > {log} 2>&1
-        python -W ignore {params.script} \
+        python -u -W ignore {params.script} \
         --input {input.h5ad} \
         --output {output.h5ad} \
         --sample {wildcards.sample} \
