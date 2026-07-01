@@ -1,7 +1,8 @@
 # MultiomePipe config yaml file
 # Combined BMO+NB cell lines (BMO) + Frenz-Wiessner 2024 (Frenz) + Fetahu 2023 (Fetahu)
 # All three datasets quantified against the shared hg38+GFP reference and integrated
-# jointly (Harmony key = dataset + donor + sample).
+# jointly (batch key = dataset + donor + sample). Batch correction method is
+# configurable under QC_RNA.BatchCorrection.method (harmony | scvi | scanvi).
 
 # Change those values to yours
 User:
@@ -222,6 +223,38 @@ QC_RNA:
 
   BatchCorrection:
     markers: /nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/marker_genes.json
+
+    # Batch correction method: "harmony" (CPU, default) | "scvi" | "scanvi".
+    # scvi/scanvi run on the SLURM `gpu` queue using workflow/envs/scvi.yaml.
+    # scanvi ALWAYS trains scVI first, then fine-tunes it with the labels below.
+    method: scanvi
+
+    # Wall-clock limit in MINUTES for the BatchCorrection job. Used for the
+    # gpu queue when method is scvi/scanvi (default 240 = 4h).
+    runtime: 240
+
+    # scVI hyperparameters (also used as the base model for scANVI).
+    scvi:
+      n_hvg: 2000          # seurat_v3 HVGs (on raw counts) used to train scVI
+      n_latent: 30         # latent dimensions -> X_scVI / X_scANVI embedding
+      max_epochs: null     # null -> scvi-tools auto heuristic
+
+    # scANVI settings (ignored when method != scanvi).
+    scanvi:
+      max_epochs: 20
+      unlabeled_category: "Unknown"
+      # Per-dataset label sources. Cells whose `dataset` matches get their
+      # label from `label_column` of `reference_h5ad`, matched by cell barcode.
+      # Datasets not listed (and any unmatched cell) become "Unknown" and are
+      # treated by scANVI as unlabeled.
+      label_sources:
+        - dataset: "Frenz"
+          reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/frenz-wiessner2024/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad
+          label_column: "author_cell_type_coarse_grained"
+        # TODO: replace with the real Fetahu annotated h5ad + its label column.
+        - dataset: "Fetahu"
+          reference_h5ad: /PLACEHOLDER/path/to/fetahu_annotated.h5ad
+          label_column: "PLACEHOLDER_cell_type_column"
 
   PlottingAnnotations:
     doublets: "Doublets 'Low quality'"
