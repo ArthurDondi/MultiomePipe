@@ -40,6 +40,9 @@ default-resources:
 # declared on the rules themselves; here we only send them to the right queue
 # (and request the GPU for CellBender).
 set-resources:
+  CellRangerMkref:
+    slurm_partition: "mediumq"
+    qos: "mediumq"
   CellRangerCount:
     slurm_partition: "mediumq"
     qos: "mediumq"

@@ -74,6 +74,13 @@ rule CellRangerMkref:
         cellranger = config['User']['cellranger'],
         outdir = config['QC_RNA']['CellRangerMkref']['output_dir'],
         genome = config['QC_RNA']['CellRangerMkref']['genome'],
+    threads: 8
+    resources:
+        # Building a STAR index for a full human primary assembly peaks well
+        # above the 8 GB / 2h profile defaults; too little of either kills
+        # mkref mid-build and leaves the broken mkref_<genome> pipestance dir.
+        mem_mb = 64000,
+        runtime = 480,   # 8h
     log:
         "logs/CellRangerMkref/mkref.log"
     benchmark:
@@ -87,11 +94,18 @@ rule CellRangerMkref:
         genes=$(realpath "{input.genes}")
         mkdir -p {params.outdir}
         cd {params.outdir}
-        rm -rf {params.genome}
+        # Remove any previous reference AND a leftover mkref pipestance dir.
+        # cellranger mkref builds inside a working dir named mkref_<genome>; an
+        # interrupted run (timeout/OOM/cancel) leaves a partial one behind, and
+        # since it is not a declared output Snakemake never cleans it, so the
+        # retry aborts with "is not a pipestance directory".
+        rm -rf {params.genome} mkref_{params.genome}
         {params.cellranger} mkref \
             --genome={params.genome} \
             --fasta="$fasta" \
-            --genes="$genes"
+            --genes="$genes" \
+            --nthreads={threads} \
+            --memgb=$(( {resources.mem_mb} / 1000 - 8 ))
         """
 
 rule CellRangerCount:

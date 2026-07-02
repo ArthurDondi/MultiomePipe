@@ -184,8 +184,8 @@ QC_RNA:
 
   CellRangerMkref:
     genome: "GRCh38_GFP"
-    fasta: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/hg38_plus_GFP.fa"
-    genes: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/hg38_plus_GFP.gtf"
+    fasta: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/GRCh38.primary_assembly.genome.plusGFP.fa"
+    genes: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/gencode.v50.basic.annotation.plusGFP.gtf"
     output_dir: "/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/cellranger_ref"
 
   CellRangerCount:
