@@ -74,6 +74,13 @@ rule CellRangerMkref:
         cellranger = config['User']['cellranger'],
         outdir = config['QC_RNA']['CellRangerMkref']['output_dir'],
         genome = config['QC_RNA']['CellRangerMkref']['genome'],
+    threads: 8
+    resources:
+        # Building a STAR index for a full human primary assembly peaks well
+        # above the 8 GB / 2h profile defaults; too little of either kills
+        # mkref mid-build and leaves the broken mkref_<genome> pipestance dir.
+        mem_mb = 64000,
+        runtime = 480,   # 8h
     log:
         "logs/CellRangerMkref/mkref.log"
     benchmark:
@@ -96,7 +103,9 @@ rule CellRangerMkref:
         {params.cellranger} mkref \
             --genome={params.genome} \
             --fasta="$fasta" \
-            --genes="$genes"
+            --genes="$genes" \
+            --nthreads={threads} \
+            --memgb=$(( {resources.mem_mb} / 1000 - 8 ))
         """
 
 rule CellRangerCount:
