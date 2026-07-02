@@ -24,7 +24,11 @@ dependencies:
   - pandas=2.2.*
   - scipy=1.13.*
   - scikit-learn=1.5.*
-  - scikit-misc=0.3.*          # required for seurat_v3 HVG (loess)
+  - scikit-misc=0.5.*          # required for seurat_v3 HVG (loess); conda-forge
+                               # has no 0.3.x (jumps 0.1.4 -> 0.5.x). 0.5.2 needs
+                               # numpy>=1.26.4 but has no upper pin and its wheels
+                               # are built numpy-2-ABI (run fine on numpy 1.x), so
+                               # it coexists with the numpy<2 torch constraint.
   - leidenalg=0.10.2
   - python-igraph=0.11.*
   - matplotlib-base=3.9.*
