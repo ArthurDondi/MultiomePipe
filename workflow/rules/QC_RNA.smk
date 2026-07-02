@@ -87,7 +87,12 @@ rule CellRangerMkref:
         genes=$(realpath "{input.genes}")
         mkdir -p {params.outdir}
         cd {params.outdir}
-        rm -rf {params.genome}
+        # Remove any previous reference AND a leftover mkref pipestance dir.
+        # cellranger mkref builds inside a working dir named mkref_<genome>; an
+        # interrupted run (timeout/OOM/cancel) leaves a partial one behind, and
+        # since it is not a declared output Snakemake never cleans it, so the
+        # retry aborts with "is not a pipestance directory".
+        rm -rf {params.genome} mkref_{params.genome}
         {params.cellranger} mkref \
             --genome={params.genome} \
             --fasta="$fasta" \
