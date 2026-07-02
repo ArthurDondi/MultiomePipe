@@ -54,6 +54,16 @@ def _bc_scvi_args(cfg):
     return " ".join(parts)
 
 rule CellRangerMkref:
+    input:
+        # Track the source FASTA + GTF as inputs (not params) so that editing
+        # either one — e.g. swapping in a GTF that actually annotates chrM —
+        # invalidates the built reference and forces a rebuild. As params these
+        # were invisible to Snakemake, so a changed GTF left the existing
+        # cellranger_ref untouched and CellRangerCount silently kept counting
+        # against a stale reference (missing chrM/MT genes in features.tsv even
+        # though the FASTA still had the chrM contig, hence chrM reads in the BAM).
+        fasta = config['QC_RNA']['CellRangerMkref']['fasta'],
+        genes = config['QC_RNA']['CellRangerMkref']['genes'],
     output:
         fasta = os.path.join(
             config['QC_RNA']['CellRangerMkref']['output_dir'],
@@ -64,8 +74,6 @@ rule CellRangerMkref:
         cellranger = config['User']['cellranger'],
         outdir = config['QC_RNA']['CellRangerMkref']['output_dir'],
         genome = config['QC_RNA']['CellRangerMkref']['genome'],
-        fasta = config['QC_RNA']['CellRangerMkref']['fasta'],
-        genes = config['QC_RNA']['CellRangerMkref']['genes'],
     log:
         "logs/CellRangerMkref/mkref.log"
     benchmark:
@@ -73,13 +81,17 @@ rule CellRangerMkref:
     shell:
         r"""
         exec > {log} 2>&1
+        # cellranger mkref writes into the current working directory and has no
+        # output-dir flag, so resolve the inputs to absolute paths before cd.
+        fasta=$(realpath "{input.fasta}")
+        genes=$(realpath "{input.genes}")
         mkdir -p {params.outdir}
         cd {params.outdir}
-        rm -r {params.genome}
+        rm -rf {params.genome}
         {params.cellranger} mkref \
             --genome={params.genome} \
-            --fasta={params.fasta} \
-            --genes={params.genes}
+            --fasta="$fasta" \
+            --genes="$genes"
         """
 
 rule CellRangerCount:
