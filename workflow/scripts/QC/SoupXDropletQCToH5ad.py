@@ -34,7 +34,10 @@ def main():
     # ------------------------------------------------------------------
     print("1. Loading SoupX-corrected matrix")
     start = timeit.default_timer()
-    adata = sc.read_10x_mtx(corrected_dir, var_names="gene_symbols", gex_only=True)
+    # Load by gene IDs (unique). Gene symbols are not unique in comprehensive
+    # references such as GENCODE, and label-based indexing on a non-unique index
+    # fails; IDs sidestep that. Symbols are kept in var['gene_symbols'].
+    adata = sc.read_10x_mtx(corrected_dir, var_names="gene_ids", gex_only=True)
     print(f"   Corrected matrix: {adata.n_obs} cells x {adata.n_vars} genes")
     print(f"   Loaded in {round(timeit.default_timer()-start, 2)}s")
 
@@ -47,14 +50,29 @@ def main():
     # Handle Multiome h5 (may have ATAC + GEX)
     if "feature_types" in adata_raw.var.columns:
         gex_mask = adata_raw.var["feature_types"] == "Gene Expression"
-        adata_raw = adata_raw[:, gex_mask]
-    # Align to corrected barcodes and genes
+        adata_raw = adata_raw[:, gex_mask].copy()
+    # Align on Ensembl gene IDs (unique), not symbols: label indexing on the
+    # raw matrix's non-unique symbols raises "Reindexing only valid with
+    # uniquely valued Index objects". Both sides carry the IDs.
+    adata_raw.var_names = adata_raw.var["gene_ids"].astype(str)
     shared_obs = adata.obs_names.intersection(adata_raw.obs_names)
     shared_var = adata.var_names.intersection(adata_raw.var_names)
+    if len(shared_var) == 0:
+        raise ValueError(
+            "No genes shared between the corrected matrix and the raw h5 after "
+            f"aligning on gene IDs. The corrected matrix in {corrected_dir} was "
+            "likely written by an older SoupX.R that stored gene symbols instead "
+            "of Ensembl IDs — re-run the SoupX step (e.g. `snakemake -R SoupX`) "
+            "to regenerate it."
+        )
     adata_raw_aligned = adata_raw[shared_obs, shared_var]
     # Store corrected in X, raw in layers['raw']
     adata = adata[shared_obs, shared_var].copy()
     adata.layers["raw"] = adata_raw_aligned.X.copy()
+    # Use gene symbols as var_names downstream (MT-/ribo prefix checks depend on
+    # them); keep the Ensembl IDs in var['gene_ids'].
+    adata.var["gene_ids"] = adata.var_names.to_numpy()
+    adata.var_names = adata.var["gene_symbols"].astype(str)
     print(f"   Raw counts added as layers['raw'] in {round(timeit.default_timer()-start, 2)}s")
 
     # ------------------------------------------------------------------

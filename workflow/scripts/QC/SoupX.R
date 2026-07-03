@@ -48,6 +48,17 @@ raw_mat <- load_gex(args$raw_h5)
 message("Loading filtered matrix: ", args$filtered_h5)
 filt_mat <- load_gex(args$filtered_h5)
 
+# Comprehensive references (e.g. GENCODE) have non-unique gene symbols;
+# Read10X_h5(use.names = TRUE) uniquifies them for processing. Capture the
+# Ensembl gene IDs (always unique, read in the same feature order) so the
+# corrected matrix can be written with them — downstream alignment keys on IDs.
+load_gene_ids <- function(h5_path) {
+    ids <- Read10X_h5(h5_path, use.names = FALSE)
+    if (is.list(ids)) ids <- ids[["Gene Expression"]]
+    rownames(ids)
+}
+sym_to_id <- setNames(load_gene_ids(args$filtered_h5), rownames(filt_mat))
+
 message("Loading DropletQC table: ", args$cell_qc)
 cell_qc <- read.table(args$cell_qc, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 rownames(cell_qc) <- cell_qc$barcode
@@ -155,9 +166,18 @@ for (gene in plot_genes) {
 message(sprintf("Written plotChangeMap PDF(s) to: %s", plot_dir))
 
 message("Writing corrected matrix to: ", file.path(args$output_dir, "corrected"))
+# Write real Ensembl IDs (unique) as the feature IDs alongside the symbols, so
+# the h5ad step can align the raw-count layer on IDs instead of non-unique names.
+corrected_ids <- unname(sym_to_id[rownames(corrected_mat)])
+if (anyNA(corrected_ids)) {
+    stop(sprintf("Could not map %d corrected gene symbol(s) back to Ensembl IDs",
+                 sum(is.na(corrected_ids))))
+}
 write10xCounts(
     path = file.path(args$output_dir, "corrected"),
     x = corrected_mat,
+    gene.id = corrected_ids,
+    gene.symbol = rownames(corrected_mat),
     type = "sparse",
     overwrite = TRUE
 )
