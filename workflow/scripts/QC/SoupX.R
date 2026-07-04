@@ -90,7 +90,13 @@ message("Cells remaining after DropletQC filter: ", ncol(filt_mat))
 
 message("Running quick Seurat clustering for SoupX...")
 
-so <- CreateSeuratObject(counts = filt_mat, min.cells = 3, min.features = 200)
+# Do NOT apply a min.features cell filter here. The SoupChannel below is built
+# from the full DropletQC-passing filt_mat, and SoupX::setClusters requires a
+# cluster label for every cell in the channel. Dropping low-gene cells from the
+# Seurat object would leave them unlabelled and abort setClusters with the
+# opaque "Invalid cluster specification. See help." error. min.cells filters
+# genes (not cells), so it is safe and keeps the quick clustering clean.
+so <- CreateSeuratObject(counts = filt_mat, min.cells = 3)
 so <- NormalizeData(so, verbose = FALSE)
 so <- FindVariableFeatures(so, nfeatures = 2000, verbose = FALSE)
 so <- ScaleData(so, verbose = FALSE)
@@ -101,6 +107,18 @@ so <- RunUMAP(so, dims = 1:30, verbose = FALSE)
 
 clusters <- setNames(as.character(so$seurat_clusters), colnames(so))
 message(sprintf("Found %d clusters (resolution = %.1f)", length(unique(clusters)), args$resolution))
+
+# Align cluster labels to the SoupChannel's cells (filt_mat order). Without a
+# min.features filter above these sets already match; guard anyway so any future
+# regression fails here with a clear message rather than SoupX's opaque one.
+unlabelled <- setdiff(colnames(filt_mat), names(clusters))
+if (length(unlabelled) > 0) {
+    stop(sprintf(
+        "%d filtered cell(s) have no Seurat cluster label (e.g. %s); cannot run SoupX::setClusters.",
+        length(unlabelled), paste(head(unlabelled, 3), collapse = ", ")
+    ))
+}
+clusters <- clusters[colnames(filt_mat)]
 
 message("Creating SoupX SoupChannel object...")
 sc_obj <- SoupChannel(tod = raw_mat, toc = filt_mat)
