@@ -249,6 +249,42 @@ tryCatch({
     message("  WARNING: could not write combined plot: ", conditionMessage(e))
 })
 
+# ── 5c. Cluster plot: nf × UMI coloured by Seurat cluster ─────────────────────
+# Damaged cells (high nf, low UMI) tend to collapse into their OWN cluster(s).
+# identify_damaged_cells() only flags damage RELATIVE to other cells of the same
+# cluster (a within-cluster bimodal split), so a cluster that is uniformly
+# damaged is left entirely unflagged. Colouring the nf × UMI scatter by Seurat
+# cluster exposes this: if the high-nf / low-UMI population is its own cluster,
+# DropletQC's damaged-cell step cannot remove it and a different gate is needed.
+tryCatch({
+    suppressPackageStartupMessages(library(ggplot2))
+
+    clust_df <- cell_qc_df[, c("nf_umi", "umi_counts", "cell_type")]
+    # Order cluster levels numerically (cluster_2 before cluster_10) so the
+    # legend and colour assignment are readable and stable across runs.
+    clust_levels <- unique(clust_df$cell_type)
+    clust_levels <- clust_levels[order(
+        suppressWarnings(as.integer(sub("^cluster_", "", clust_levels))),
+        clust_levels
+    )]
+    clust_df$cell_type <- factor(clust_df$cell_type, levels = clust_levels)
+
+    p_clusters <- ggplot(clust_df, aes(x = nf_umi, y = log10(umi_counts),
+                                       colour = cell_type)) +
+        geom_point(size = 0.4, alpha = 0.6) +
+        labs(x = "Nuclear fraction", y = "log10(UMI count)",
+             colour = "Seurat cluster",
+             title = "DropletQC cells: coloured by Seurat cluster") +
+        theme_bw(base_size = 11) +
+        guides(colour = guide_legend(override.aes = list(size = 3, alpha = 1)))
+
+    clusters_path <- file.path(args$output_dir, "dropletqc_clusters.png")
+    ggsave(clusters_path, p_clusters, width = 6.5, height = 4, dpi = 150)
+    message("  Cluster plot written to: ", clusters_path)
+}, error = function(e) {
+    message("  WARNING: could not write cluster plot: ", conditionMessage(e))
+})
+
 # ── 6. Build final output & compare with CellRanger ─────────────────────────
 
 message("[6/6] Building outputs and comparing with CellRanger ...")
