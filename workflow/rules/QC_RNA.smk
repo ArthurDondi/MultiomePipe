@@ -136,7 +136,7 @@ rule CellRangerCount:
         fastq_dir = lambda wildcards: SAMPLES[wildcards.sample].get('fastq_dir', INPUT),
         cr_sample = lambda wildcards: SAMPLES[wildcards.sample].get('cellranger_sample', wildcards.sample),
         localmem = 64,
-    threads: 8
+    threads: 24
     resources:
         mem_mb = 72000,
         runtime = 2880,   # 24h (mediumq)
