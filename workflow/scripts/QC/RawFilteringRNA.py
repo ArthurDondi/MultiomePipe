@@ -59,6 +59,20 @@ def run_calculate_qc_metrics(adata, sample):
         show=False,
         save=f"_{sample}.png"
     )
+    # Nuclear fraction (DropletQC, SoupX path only): a twin of the scatter above
+    # coloured by nf. Cytoplasm-stripped / damaged cells sit at high nf and low
+    # counts; because they can carry normal mito% and gene counts they slip past
+    # the filters below, so surfacing nf here flags damage those metrics miss.
+    if "nf_umi" in adata.obs.columns and adata.obs["nf_umi"].notna().any():
+        sc.pl.scatter(
+            adata,
+            "total_counts",
+            "n_genes_by_counts",
+            color="nf_umi",
+            size=50,
+            show=False,
+            save=f"_nf_{sample}.png"
+        )
     return adata
 
 def run_raw_filtering(adata, min_genes, min_cells, n_mads, sample):
@@ -163,6 +177,10 @@ def run_normalization_and_clustering(adata, sample, n_top_genes, is_filtered):
     
     QCs = ["log1p_total_counts", "n_genes_by_counts", "pct_counts_mt", "doublet_score",'S_score','G2M_score']
     if not is_filtered:
+        # Nuclear fraction (DropletQC, SoupX path): colour the UMAP by nf so the
+        # high-nf damaged population is visible amongst the other QC metrics.
+        if "nf_umi" in adata.obs.columns and adata.obs["nf_umi"].notna().any():
+            QCs.append("nf_umi")
         # Accept contamination column from CellBender or SoupX
         for col in ["background_fraction", "contamination_fraction", "soupx_rho"]:
             if col in adata.obs.columns:
