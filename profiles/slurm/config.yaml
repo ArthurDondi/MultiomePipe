@@ -44,8 +44,8 @@ set-resources:
     slurm_partition: "mediumq"
     qos: "mediumq"
   CellRangerCount:
-    slurm_partition: "mediumq"
-    qos: "mediumq"
+    slurm_partition: "longq"
+    qos: "longq"
   CellbenderRemoveBackgroundRNA:
     slurm_partition: "gpu"
     qos: "gpu"
