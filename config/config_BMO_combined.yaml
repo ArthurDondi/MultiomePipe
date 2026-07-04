@@ -7,7 +7,7 @@
 # Change those values to yours
 User:
   input_dir: /nobackup/lab_taschner-mandl/arthurdondi/data            # fallback root; per-sample fastq_dir below is authoritative
-  output_dir: /nobackup/lab_taschner-mandl/arthurdondi/BMO
+  output_dir: /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO
   cellranger: /nobackup/lab_taschner-mandl/arthurdondi/src/cellranger-10.0.0/cellranger
 
 # Change any of those to True if you want to run it, else False

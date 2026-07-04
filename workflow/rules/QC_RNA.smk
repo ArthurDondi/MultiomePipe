@@ -139,7 +139,7 @@ rule CellRangerCount:
     threads: 8
     resources:
         mem_mb = 72000,
-        runtime = 1440,   # 24h (mediumq)
+        runtime = 2880,   # 24h (mediumq)
     log:
         "logs/CellRangerCount/{sample}.log"
     benchmark:

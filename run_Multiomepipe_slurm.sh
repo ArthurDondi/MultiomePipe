@@ -2,8 +2,9 @@
 #SBATCH --output /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/logs/MultiomePipe_%j.log
 #SBATCH --error  /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/logs/MultiomePipe_%j.err
 #SBATCH --job-name=MultiomePipe 
-#SBATCH --partition=shortq      # 30d limit: long enough for the whole workflow
-#SBATCH --qos=shortq            # qos must match the partition
+#SBATCH --partition=longq      # 30d limit: long enough for the whole workflow
+#SBATCH --qos=longq            # qos must match the partition
+#SBATCH --time=7-00:00:00     # 20 days 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1      # this job is only the Snakemake controller
@@ -43,4 +44,4 @@ snakemake \
     --workflow-profile profiles/slurm \
     --jobs 50 \
     --rerun-triggers mtime params software-env \
-    -p -n --until CellRangerCount
+    -p --until BatchCorrection
