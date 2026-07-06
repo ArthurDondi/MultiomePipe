@@ -42,6 +42,6 @@ snakemake \
     -s workflow/Snakefile \
     --configfile "$CONFIG" \
     --workflow-profile profiles/slurm \
-    --jobs 100 \
+    --jobs 50 \
     --rerun-triggers mtime params software-env \
     -p --until BatchCorrection
