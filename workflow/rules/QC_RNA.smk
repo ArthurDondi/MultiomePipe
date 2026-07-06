@@ -515,6 +515,11 @@ rule PlottingAnnotationsManual:
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
         celltype_key = config['General']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
+    resources:
+        # Re-loads the full merged (all-cells) dataset to render annotation
+        # UMAPs; the 8 GB default risks OOM on large runs. Matches BatchCorrection.
+        mem_mb = 32000,
+        runtime = 240,    # 4h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -549,6 +554,11 @@ rule PlottingAnnotationsAutomatic:
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
         celltype_key = config['General']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
+    resources:
+        # Re-loads the full merged (all-cells) dataset to render annotation
+        # UMAPs; the 8 GB default risks OOM on large runs. Matches BatchCorrection.
+        mem_mb = 32000,
+        runtime = 240,    # 4h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -581,6 +591,11 @@ rule LabelTransfer:
         reference_columns = " ".join(config['QC_RNA']['LabelTransfer']['reference_columns']),
         celltype_key = config['General']['celltype_key'],
         n_neighbors = config['QC_RNA']['LabelTransfer'].get('n_neighbors', 15),
+    resources:
+        # Loads the merged dataset AND the reference atlas, then builds a joint
+        # kNN graph for label transfer — peak RAM exceeds the merged object alone.
+        mem_mb = 64000,
+        runtime = 360,    # 6h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -616,6 +631,11 @@ rule TrajectoryAnalysis:
         clustering_distance = config['QC_RNA']['TrajectoryAnalysis']['clustering_distance'],
         cat_order = config['QC_RNA']['TrajectoryAnalysis']['cat_order'],
         branching = config['QC_RNA']['TrajectoryAnalysis']['branching'],
+    resources:
+        # Diffusion-map / pseudotime on the merged dataset (eigendecomposition of
+        # the cell-cell graph) is memory-heavy; the 8 GB default OOMs on large runs.
+        mem_mb = 64000,
+        runtime = 360,    # 6h
     conda:
         "../envs/scverse.yaml"
     log:
