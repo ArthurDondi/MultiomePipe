@@ -35,6 +35,11 @@ dependencies:
   - seaborn=0.13.*
   - h5py=3.11.*
   - pyyaml
+  - pooch                      # scvi-tools lists pooch as an *optional* extra,
+                               # but `import scvi` pulls in scvi.data ->
+                               # _built_in_data/{_loom,_smfish}.py which do a
+                               # top-level `import pooch`, so it's needed just to
+                               # import scvi at all (not only for built-in data).
 
   - pip:
       # CUDA 12.1 PyTorch wheels (compatible with driver 535 / CUDA 12.2, sm_89).
