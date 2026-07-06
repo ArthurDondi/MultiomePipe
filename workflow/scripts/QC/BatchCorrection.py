@@ -9,6 +9,55 @@ import scanpy.external as sce
 import pandas as pd
 
 
+def read_h5ad(path):
+    """Read an h5ad, tolerating ``null``-encoded scalars from a newer anndata.
+
+    ``sc.pp.log1p`` records ``uns['log1p'] = {'base': None}``. anndata >= 0.12
+    (the version in envs/scverse.yaml, which writes the merged object) serialises
+    that ``None`` with ``encoding_type='null'``. The 0.11.x anndata pinned in
+    envs/scvi.yaml — used by this script for the scvi/scanvi backends — has no
+    read method registered for ``null`` and blows up with an ``IORegistryError``.
+
+    A plain ``read_dispatched`` callback can't recover, because anndata resolves
+    the (missing) read method *before* the callback runs. So we intercept at the
+    enclosing mapping: whenever a dict directly contains a ``null``-encoded child,
+    we read that dict ourselves and substitute ``None``, exactly the value the
+    newer anndata would have produced. Everything else defers to the default
+    reader, so behaviour is unchanged on anndata versions that read ``null`` fine.
+    """
+    try:
+        return ad.io.read_h5ad(path)
+    except Exception as err:
+        if "encoding_type='null'" not in str(err):
+            raise
+
+        import h5py
+        from anndata.experimental import read_dispatched
+
+        def _is_null(elem):
+            return elem.attrs.get("encoding-type") == "null"
+
+        def callback(read_func, elem_name, elem, iospec):
+            if iospec.encoding_type == "null":
+                return None
+            if iospec.encoding_type == "dict" and any(
+                _is_null(v) for v in elem.values()
+            ):
+                return {
+                    k: None if _is_null(v) else read_dispatched(v, callback)
+                    for k, v in elem.items()
+                }
+            return read_func(elem)
+
+        try:
+            with h5py.File(path, "r") as f:
+                return read_dispatched(f, callback)
+        except Exception:
+            # Fall back to the original error so genuine read problems aren't
+            # masked by the null-encoding workaround.
+            raise err
+
+
 def prepare_annotation(adata, markers_file):
 
     with open(markers_file, "r") as f:
@@ -219,7 +268,7 @@ def build_scanvi_labels(adata, dataset_key, label_datasets, label_refs,
                   f"({ref_path}); leaving {n_ds} cells as '{unlabeled_category}'")
             continue
 
-        ref = ad.io.read_h5ad(ref_path)
+        ref = read_h5ad(ref_path)
         if col not in ref.obs.columns:
             print(f"  [labels] dataset '{dataset}': column '{col}' absent in "
                   f"reference obs ({list(ref.obs.columns)[:10]} ...); "
@@ -298,7 +347,7 @@ def main():
 
     print("1. Load Data")
     start = timeit.default_timer()
-    adata = ad.io.read_h5ad(input_file)
+    adata = read_h5ad(input_file)
     stop = timeit.default_timer()
     print(f"Data loaded in {round(stop-start,2)}s")
 
