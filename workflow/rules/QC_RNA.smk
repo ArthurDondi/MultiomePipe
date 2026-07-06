@@ -394,6 +394,15 @@ rule MergeSamplesAnnData:
         sample_key = config['General']['sample_key'],
         dataset_key = config['General'].get('dataset_key', 'dataset'),
         is_filtered = "--is_filtered" if IS_FILTERED else ""
+    resources:
+        # Peak RAM scales with the TOTAL cell count across all samples: the script
+        # reads every per-sample .h5ad into memory at once, holds them while
+        # building the concatenated copy, then runs PCA/neighbors/UMAP/Leiden on
+        # the full merged dataset. The 8 GB profile default OOM-kills this silently
+        # (empty log). 128 GB gives ample headroom for large multi-sample runs;
+        # tune down if your dataset is small. 6h fits within shortq (12h).
+        mem_mb = 128000,
+        runtime = 360,    # 6h
     conda:
         "../envs/scverse.yaml"
     log:
