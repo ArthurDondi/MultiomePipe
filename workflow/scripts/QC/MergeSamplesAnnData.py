@@ -98,10 +98,18 @@ def run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered):
             show=False,
             save=f"_leiden_res_merge.png")
     
-    if is_filtered:
-        QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score"]
-    else:
-        QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score", "background_fraction"]
+    QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score"]
+    if not is_filtered:
+        # The ambient-contamination metric is named differently depending on the
+        # background-correction backend: CellBender writes 'background_fraction',
+        # SoupX writes 'soupx_rho' (aliased to 'contamination_fraction'). Overlay
+        # whichever one is present so the UMAP does not crash with a KeyError.
+        for col in ["background_fraction", "contamination_fraction", "soupx_rho"]:
+            if col in adata.obs.columns:
+                QCs.append(col)
+                break
+    # Guard against any QC column that did not survive the merge/join.
+    QCs = [c for c in QCs if c in adata.obs.columns]
     sc.pl.umap(adata,
                 color=QCs,
                 show=False,
