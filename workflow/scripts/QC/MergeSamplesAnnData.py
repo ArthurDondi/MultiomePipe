@@ -70,7 +70,7 @@ def plot_qc_metrics(adata):
     )
 
 
-def run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered):
+def run_normalization_and_clustering(adata, donor_key, sample_key, dataset_key, is_filtered):
 
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
@@ -100,6 +100,11 @@ def run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered):
     
     QCs = ["log1p_total_counts", "pct_counts_mt", "doublet_score"]
     if not is_filtered:
+        # Nuclear fraction (DropletQC, SoupX path): colour the UMAP by nf so the
+        # high-nf damaged population is visible amongst the other QC metrics,
+        # mirroring the per-sample QC UMAP in RawFilteringRNA.
+        if "nf_umi" in adata.obs.columns and adata.obs["nf_umi"].notna().any():
+            QCs.append("nf_umi")
         # The ambient-contamination metric is named differently depending on the
         # background-correction backend: CellBender writes 'background_fraction',
         # SoupX writes 'soupx_rho' (aliased to 'contamination_fraction'). Overlay
@@ -114,8 +119,15 @@ def run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered):
                 color=QCs,
                 show=False,
                 save=f"_QC_merge.png")
+    # Colour the uncorrected UMAP by dataset-of-origin (the coarsest batch
+    # covariate) and sample. `wspace` widens the gap between the two panels so
+    # the left panel's legend is not overpainted by the right panel; scanpy
+    # saves with bbox_inches='tight', so the right panel's (long) sample legend
+    # is fully included. Fall back to donor if no dataset column is present.
+    batch_key = dataset_key if (dataset_key and dataset_key in adata.obs.columns) else donor_key
     sc.pl.umap(adata,
-                color=[donor_key,sample_key],
+                color=[batch_key,sample_key],
+                wspace=0.5,
                 show=False,
                 save=f"_batch_nocorrection_merge.png")
     
@@ -168,7 +180,7 @@ def main():
     # 3. Normalization + clustering
     print("3. Normalization + clustering")
     start = timeit.default_timer()
-    adata = run_normalization_and_clustering(adata, donor_key, sample_key, is_filtered)
+    adata = run_normalization_and_clustering(adata, donor_key, sample_key, dataset_key, is_filtered)
     stop = timeit.default_timer()
     print(f"Normalization + clustering done in {round(stop-start,2)}s")
 
