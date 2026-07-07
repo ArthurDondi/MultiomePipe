@@ -85,6 +85,56 @@ def prepare_annotation(adata, markers_file):
     return adata
 
 
+def _plot_umap_on_data_with_legend(adata, col):
+    """UMAP with small, non-bold on-data labels *and* a right-margin legend.
+
+    scanpy's `legend_loc` is either 'on data' or 'right margin', never both, so
+    we draw the small on-data labels through scanpy and add the categorical
+    colour legend ourselves from the palette scanpy stores in `uns`. Used for the
+    scANVI label / prediction overlays, which have many fine-grained cell types
+    whose on-data labels overlap — the side legend stays readable regardless.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Patch
+
+    # Ensure a stable categorical so the palette scanpy writes to uns lines up
+    # with the categories we build the legend from (scANVI predictions come back
+    # as a plain object column, not a categorical).
+    if not isinstance(adata.obs[col].dtype, pd.CategoricalDtype):
+        adata.obs[col] = adata.obs[col].astype("category")
+    cats = list(adata.obs[col].cat.categories)
+
+    fig, ax = plt.subplots(figsize=(8, 7))
+    sc.pl.umap(adata,
+               color=col,
+               ax=ax,
+               legend_loc="on data",
+               legend_fontsize=5,
+               legend_fontweight="normal",
+               legend_fontoutline=1,
+               show=False)
+
+    colors = adata.uns.get(f"{col}_colors")
+    if colors is not None and len(colors) >= len(cats):
+        handles = [Patch(facecolor=colors[i], label=str(cats[i]))
+                   for i in range(len(cats))]
+        ax.legend(handles=handles,
+                  loc="center left",
+                  bbox_to_anchor=(1.02, 0.5),
+                  frameon=False,
+                  fontsize=6,
+                  ncol=2 if len(cats) > 20 else 1,
+                  title=col,
+                  title_fontsize=7)
+
+    figdir = str(sc.settings.figdir)
+    os.makedirs(figdir, exist_ok=True)
+    # Match scanpy's own naming (umap<save>) so downstream expectations hold.
+    fig.savefig(os.path.join(figdir, f"umap_{col}_merge.png"),
+                dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep, extra_colors=None):
     """Build neighbours/UMAP on `use_rep`, then Leiden-cluster and plot.
 
@@ -150,12 +200,7 @@ def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep, 
 
     for col in (extra_colors or []):
         if col in adata.obs.columns:
-            sc.pl.umap(adata,
-                       color=col,
-                       legend_loc="on data",
-                       legend_fontsize=8,
-                       show=False,
-                       save=f"_{col}_merge.png")
+            _plot_umap_on_data_with_legend(adata, col)
 
 
 # -----------------------------
