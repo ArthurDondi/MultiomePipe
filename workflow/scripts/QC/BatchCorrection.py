@@ -85,7 +85,7 @@ def prepare_annotation(adata, markers_file):
     return adata
 
 
-def _plot_umap_on_data_with_legend(adata, col):
+def _plot_umap_on_data_with_legend(adata, col, unlabeled_category=None):
     """UMAP with small, non-bold on-data labels *and* a right-margin legend.
 
     scanpy's `legend_loc` is either 'on data' or 'right margin', never both, so
@@ -93,6 +93,10 @@ def _plot_umap_on_data_with_legend(adata, col):
     colour legend ourselves from the palette scanpy stores in `uns`. Used for the
     scANVI label / prediction overlays, which have many fine-grained cell types
     whose on-data labels overlap — the side legend stays readable regardless.
+
+    If `unlabeled_category` is given and present in `col`, those seed cells are
+    forced to light grey so the reference-matched labels stand out (only the
+    scanvi_labels overlay carries it; C_scANVI predictions never do).
     """
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
@@ -103,6 +107,19 @@ def _plot_umap_on_data_with_legend(adata, col):
     if not isinstance(adata.obs[col].dtype, pd.CategoricalDtype):
         adata.obs[col] = adata.obs[col].astype("category")
     cats = list(adata.obs[col].cat.categories)
+
+    # Force the unlabeled/"Unknown" seed cells to light grey so the reference-
+    # matched labels stand out. We pre-set the palette in uns — giving every
+    # other category the same default colour scanpy would have picked (same
+    # size thresholds) — so both the scatter and the legend below honour it.
+    if unlabeled_category is not None and unlabeled_category in cats:
+        n = len(cats)
+        base = (sc.pl.palettes.default_20 if n <= 20
+                else sc.pl.palettes.default_28 if n <= 28
+                else sc.pl.palettes.default_102)
+        palette = [base[i % len(base)] for i in range(n)]
+        palette[cats.index(unlabeled_category)] = "lightgray"
+        adata.uns[f"{col}_colors"] = palette
 
     fig, ax = plt.subplots(figsize=(8, 7))
     sc.pl.umap(adata,
@@ -135,14 +152,16 @@ def _plot_umap_on_data_with_legend(adata, col):
     plt.close(fig)
 
 
-def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep, extra_colors=None):
+def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep,
+               extra_colors=None, unlabeled_category=None):
     """Build neighbours/UMAP on `use_rep`, then Leiden-cluster and plot.
 
     `use_rep` is the batch-corrected embedding produced by the chosen method
     (X_pca_harmony / X_scVI / X_scANVI). `dataset_key` colours the batch UMAP by
     dataset-of-origin (falling back to `donor_key` when absent). `extra_colors`
     are optional extra obs columns to overlay on the UMAP (e.g. scANVI labels /
-    predictions).
+    predictions); `unlabeled_category` greys those seed cells out in the
+    scANVI-label overlay.
     """
 
     if use_rep in adata.obsm:
@@ -200,7 +219,7 @@ def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep, 
 
     for col in (extra_colors or []):
         if col in adata.obs.columns:
-            _plot_umap_on_data_with_legend(adata, col)
+            _plot_umap_on_data_with_legend(adata, col, unlabeled_category)
 
 
 # -----------------------------
@@ -441,7 +460,8 @@ def main():
 
     print("3. Clustering")
     start = timeit.default_timer()
-    clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep, extra_colors)
+    clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep, extra_colors,
+               unlabeled_category=args.unlabeled_category)
     stop = timeit.default_timer()
     print(f"Clustered in {round(stop-start,2)}s")
 
