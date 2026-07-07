@@ -235,7 +235,7 @@ QC_RNA:
 
     # scVI hyperparameters (also used as the base model for scANVI).
     scvi:
-      n_hvg: 2000          # seurat_v3 HVGs (on raw counts) used to train scVI
+      n_hvg: 5000          # seurat_v3 HVGs (on raw counts) used to train scVI
       n_latent: 30         # latent dimensions -> X_scVI / X_scANVI embedding
       max_epochs: null     # null -> scvi-tools auto heuristic
 
@@ -250,11 +250,10 @@ QC_RNA:
       label_sources:
         - dataset: "Frenz"
           reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/frenz-wiessner2024/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad
-          label_column: "author_cell_type_coarse_grained"
-        # TODO: replace with the real Fetahu annotated h5ad + its label column.
+          label_column: "author_cell_type"
         - dataset: "Fetahu"
-          reference_h5ad: /PLACEHOLDER/path/to/fetahu_annotated.h5ad
-          label_column: "PLACEHOLDER_cell_type_column"
+          reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/fetahu2023.scRNA/Published/metadata_celltype.h5ad # derived from metadata.rds
+          label_column: "cellont_name"
 
   PlottingAnnotations:
     doublets: "Doublets 'Low quality'"

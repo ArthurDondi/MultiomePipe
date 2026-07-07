@@ -394,6 +394,9 @@ rule MergeSamplesAnnData:
         sample_key = config['General']['sample_key'],
         dataset_key = config['General'].get('dataset_key', 'dataset'),
         is_filtered = "--is_filtered" if IS_FILTERED else ""
+    resources:
+        mem_mb = 128000,   # 128 GB
+        runtime = 360,     # 6h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -506,6 +509,9 @@ rule PlottingAnnotationsManual:
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
         celltype_key = config['General']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
+    resources:
+        mem_mb = 32000,   # 32 GB
+        runtime = 240,     # 4h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -540,6 +546,9 @@ rule PlottingAnnotationsAutomatic:
         doublets = config['QC_RNA']['PlottingAnnotations']['doublets'],
         celltype_key = config['General']['celltype_key'],
         leiden_res = config['QC_RNA']['PlottingAnnotations']['leiden_res'],
+    resources:
+        mem_mb = 32000,   # 32 GB
+        runtime = 240,     # 4h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -572,6 +581,9 @@ rule LabelTransfer:
         reference_columns = " ".join(config['QC_RNA']['LabelTransfer']['reference_columns']),
         celltype_key = config['General']['celltype_key'],
         n_neighbors = config['QC_RNA']['LabelTransfer'].get('n_neighbors', 15),
+    resources:
+        mem_mb = 32000,   # 32 GB
+        runtime = 240,     # 4h
     conda:
         "../envs/scverse.yaml"
     log:
@@ -607,6 +619,9 @@ rule TrajectoryAnalysis:
         clustering_distance = config['QC_RNA']['TrajectoryAnalysis']['clustering_distance'],
         cat_order = config['QC_RNA']['TrajectoryAnalysis']['cat_order'],
         branching = config['QC_RNA']['TrajectoryAnalysis']['branching'],
+    resources:
+        mem_mb = 32000,   # 32 GB
+        runtime = 240,     # 4h
     conda:
         "../envs/scverse.yaml"
     log:
