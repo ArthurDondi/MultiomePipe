@@ -13,16 +13,17 @@ if BG_CORRECTION not in {"cellbender", "soupx"}:
         "Choose 'cellbender' or 'soupx'."
     )
 
-# Batch correction method: "harmony" (default, CPU) or "scvi"/"scanvi" (GPU).
-# scvi/scanvi run on the `gpu` SLURM queue and use the scvi-tools conda env.
+# Batch correction method: "harmony" (default, CPU) or "scvi"/"scanvi"/"scvi_knn"
+# (GPU). scvi* run on the `gpu` SLURM queue and use the scvi-tools conda env.
+# "scvi_knn" integrates with scVI then kNN-propagates the label_sources labels.
 _BC_CFG = config.get("QC_RNA", {}).get("BatchCorrection", {})
 BC_METHOD = _BC_CFG.get("method", "harmony").lower()
-if BC_METHOD not in {"harmony", "scvi", "scanvi"}:
+if BC_METHOD not in {"harmony", "scvi", "scanvi", "scvi_knn"}:
     raise ValueError(
         f"Unsupported QC_RNA.BatchCorrection.method '{BC_METHOD}'. "
-        "Choose 'harmony', 'scvi' or 'scanvi'."
+        "Choose 'harmony', 'scvi', 'scanvi' or 'scvi_knn'."
     )
-BC_USE_GPU = BC_METHOD in {"scvi", "scanvi"}
+BC_USE_GPU = BC_METHOD in {"scvi", "scanvi", "scvi_knn"}
 BC_ENV = "../envs/scvi.yaml" if BC_USE_GPU else "../envs/scverse.yaml"
 # Wall-clock for the BatchCorrection job (minutes). GPU runs default to 4h on
 # the gpu queue; harmony keeps the historical 6h. Override via config.
@@ -39,10 +40,15 @@ def _bc_scvi_args(cfg):
     parts.append(f"--n_latent {scvi.get('n_latent', 30)}")
     if scvi.get("max_epochs") is not None:
         parts.append(f"--scvi_max_epochs {scvi['max_epochs']}")
-    if BC_METHOD == "scanvi":
+    # scanvi and scvi_knn both consume the label_sources block (seed labels);
+    # scanvi fine-tunes on them, scvi_knn kNN-propagates them.
+    if BC_METHOD in {"scanvi", "scvi_knn"}:
         scanvi = cfg.get("scanvi", {}) or {}
-        parts.append(f"--scanvi_max_epochs {scanvi.get('max_epochs', 20)}")
         parts.append(f"--unlabeled_category '{scanvi.get('unlabeled_category', 'Unknown')}'")
+        if BC_METHOD == "scanvi":
+            parts.append(f"--scanvi_max_epochs {scanvi.get('max_epochs', 20)}")
+        else:
+            parts.append(f"--knn_neighbors {scanvi.get('knn_neighbors', 15)}")
         sources = scanvi.get("label_sources", []) or []
         if sources:
             ds = " ".join(str(s["dataset"]) for s in sources)

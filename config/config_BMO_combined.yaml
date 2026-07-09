@@ -224,10 +224,12 @@ QC_RNA:
   BatchCorrection:
     markers: /nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/marker_genes.json
 
-    # Batch correction method: "harmony" (CPU, default) | "scvi" | "scanvi".
-    # scvi/scanvi run on the SLURM `gpu` queue using workflow/envs/scvi.yaml.
-    # scanvi ALWAYS trains scVI first, then fine-tunes it with the labels below.
-    method: scanvi
+    # Batch correction method: "harmony" (CPU) | "scvi" | "scanvi" | "scvi_knn".
+    # scvi* run on the SLURM `gpu` queue using workflow/envs/scvi.yaml. "scanvi"
+    # trains scVI then label-supervised scANVI; "scvi_knn" integrates with scVI
+    # (label-free) then kNN-propagates the labels below — use when the datasets
+    # share too few cell-type labels for scANVI's supervision to help integration.
+    method: scvi_knn
 
     # Wall-clock limit in MINUTES for the BatchCorrection job. Used for the
     # gpu queue when method is scvi/scanvi (default 240 = 4h).
@@ -239,14 +241,15 @@ QC_RNA:
       n_latent: 30         # latent dimensions -> X_scVI / X_scANVI embedding
       max_epochs: null     # null -> scvi-tools auto heuristic
 
-    # scANVI settings (ignored when method != scanvi).
+    # Label settings — used by BOTH "scanvi" (fine-tuning) and "scvi_knn"
+    # (kNN propagation). max_epochs applies to scanvi; knn_neighbors to scvi_knn.
     scanvi:
-      max_epochs: 20
+      max_epochs: 20         # scANVI fine-tuning epochs (method: scanvi)
+      knn_neighbors: 15      # kNN neighbours for label propagation (method: scvi_knn)
       unlabeled_category: "Unknown"
       # Per-dataset label sources. Cells whose `dataset` matches get their
       # label from `label_column` of `reference_h5ad`, matched by cell barcode.
-      # Datasets not listed (and any unmatched cell) become "Unknown" and are
-      # treated by scANVI as unlabeled.
+      # Datasets not listed (and any unmatched cell) become "Unknown" (unlabeled).
       label_sources:
         - dataset: "Frenz"
           reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/frenz-wiessner2024/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad

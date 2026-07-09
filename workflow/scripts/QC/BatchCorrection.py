@@ -308,6 +308,40 @@ def run_scanvi(adata, scvi_model, labels_key, unlabeled_category, max_epochs):
     return scanvi_model
 
 
+def propagate_labels_knn(adata, rep_key, labels_key, unlabeled_category,
+                         n_neighbors=15, out_key="C_knn"):
+    """kNN label propagation in ``adata.obsm[rep_key]`` (the scVI embedding).
+
+    Each cell left as ``unlabeled_category`` in ``adata.obs[labels_key]`` inherits
+    the distance-weighted majority label of its nearest *seed* (reference-labelled)
+    neighbours; seed cells keep their own label. Only labels are expanded — the
+    embedding is never modified, so integration stays exactly the unsupervised
+    scVI result (no label feedback, unlike scANVI). Use when the datasets share
+    too few labels for scANVI's supervision to help integration.
+    """
+    from sklearn.neighbors import KNeighborsClassifier
+
+    X = adata.obsm[rep_key]
+    seed = adata.obs[labels_key].astype(str).to_numpy()
+    labeled = seed != str(unlabeled_category)
+    n_lab = int(labeled.sum())
+    if n_lab == 0:
+        raise ValueError("kNN propagation: no seed-labelled cells to propagate from.")
+    k = int(min(n_neighbors, n_lab))
+    clf = KNeighborsClassifier(n_neighbors=k, weights="distance")
+    clf.fit(X[labeled], seed[labeled])
+
+    pred = seed.copy()
+    unlabeled_mask = ~labeled
+    if unlabeled_mask.any():
+        pred[unlabeled_mask] = clf.predict(X[unlabeled_mask])
+    adata.obs[out_key] = pd.Categorical(pred)
+    print(f"  [knn] {labels_key} -> {out_key} on {rep_key} (k={k}): "
+          f"{n_lab}/{adata.n_obs} seeds expanded to all cells; "
+          f"{pd.Series(pred).nunique()} labels")
+    return out_key
+
+
 # -----------------------------
 # Label ingestion (for scANVI)
 # -----------------------------
@@ -388,8 +422,10 @@ def initialize_parser():
     parser.add_argument('--donor_key', type=str, required=True)
     parser.add_argument('--dataset_key', type=str, default=None)
     parser.add_argument('--method', type=str, default='harmony',
-                        choices=['harmony', 'scvi', 'scanvi'],
-                        help="Batch correction method (scanvi always trains scVI first)")
+                        choices=['harmony', 'scvi', 'scanvi', 'scvi_knn'],
+                        help="Batch correction method. 'scanvi' trains scVI then "
+                             "label-supervised scANVI; 'scvi_knn' integrates with "
+                             "scVI (label-free) then kNN-propagates the labels.")
     # scVI / scANVI hyperparameters
     parser.add_argument('--n_hvg', type=int, default=2000)
     parser.add_argument('--n_latent', type=int, default=30)
@@ -401,6 +437,8 @@ def initialize_parser():
     parser.add_argument('--label_datasets', type=str, nargs='*', default=[])
     parser.add_argument('--label_refs', type=str, nargs='*', default=[])
     parser.add_argument('--label_columns', type=str, nargs='*', default=[])
+    parser.add_argument('--knn_neighbors', type=int, default=15,
+                        help="Neighbours for scvi_knn label propagation")
     return parser
 
 
@@ -453,6 +491,20 @@ def main():
                    args.scanvi_max_epochs)
         use_rep = "X_scANVI"
         extra_colors = [labels_key, "C_scANVI"]
+    elif method == "scvi_knn":
+        # scVI (unsupervised) integration, then kNN label propagation in X_scVI:
+        # each unlabelled cell inherits its nearest labelled neighbours' label.
+        # Labels never shape the embedding, so integration is exactly scVI's —
+        # use when datasets share too few labels for scANVI to help.
+        labels_key = build_scanvi_labels(
+            adata, dataset_key, args.label_datasets, args.label_refs,
+            args.label_columns, args.unlabeled_category)
+        scvi_model = run_scvi(adata, batch_keys, args.n_hvg, args.n_latent,
+                              args.scvi_max_epochs)
+        use_rep = "X_scVI"
+        pred_key = propagate_labels_knn(adata, use_rep, labels_key,
+                                        args.unlabeled_category, args.knn_neighbors)
+        extra_colors = [labels_key, pred_key]
     else:
         raise ValueError(f"Unknown method '{method}'")
     stop = timeit.default_timer()
