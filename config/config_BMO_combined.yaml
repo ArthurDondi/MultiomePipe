@@ -243,21 +243,17 @@ QC_RNA:
     scanvi:
       max_epochs: 20
       unlabeled_category: "Unknown"
-      # Method A (double scANVI): scANVI #1 integrates on `label_column` (coarse,
-      # harmonized so it is consistent across datasets) and scANVI #2 annotates on
-      # `label_column_fine` (native fine labels). Both columns live in the
-      # *.harmonized.h5ad references (build them from your reference h5ads with
-      # harmonize_celltypes.py). Cells whose `dataset` matches get their labels by
-      # barcode; datasets not listed (and any unmatched cell) become "Unknown".
+      # Per-dataset label sources. Cells whose `dataset` matches get their
+      # label from `label_column` of `reference_h5ad`, matched by cell barcode.
+      # Datasets not listed (and any unmatched cell) become "Unknown" and are
+      # treated by scANVI as unlabeled.
       label_sources:
         - dataset: "Frenz"
-          reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/frenz-wiessner2024/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.harmonized.h5ad
-          label_column: "celltype_integration"
-          label_column_fine: "celltype_fine"
+          reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/frenz-wiessner2024/h5ad/5aa415c8-47e1-41f3-9a83-663b4e4c36b1.h5ad
+          label_column: "author_cell_type"
         - dataset: "Fetahu"
-          reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/fetahu2023.scRNA/Published/metadata_celltype.harmonized.h5ad # derived from metadata.rds
-          label_column: "celltype_integration"
-          label_column_fine: "celltype_fine"
+          reference_h5ad: /nobackup/lab_taschner-mandl/arthurdondi/data/fetahu2023.scRNA/Published/metadata_celltype.h5ad # derived from metadata.rds
+          label_column: "cellont_name"
 
   PlottingAnnotations:
     doublets: "Doublets 'Low quality'"

@@ -4,6 +4,7 @@ import json
 import argparse
 import timeit
 import anndata as ad
+import numpy as np
 import scanpy as sc
 import scanpy.external as sce
 import pandas as pd
@@ -85,91 +86,75 @@ def prepare_annotation(adata, markers_file):
     return adata
 
 
-def _plot_umap_on_data_with_legend(adata, col, unlabeled_category=None, save=None):
+def _shared_label_colors(adata, cols, unlabeled_category=None):
+    """One {label: colour} map shared across `cols`, so a given cell type gets the
+    SAME colour in every overlay (e.g. scanvi_labels and C_scANVI). The unlabeled
+    category is forced to light grey. Uses scanpy's 102-colour palette (well
+    separated) so adjacent fine types — e.g. MK vs MEP — do not collide.
+    """
+    labels = set()
+    for c in cols:
+        if c in adata.obs.columns:
+            labels |= set(adata.obs[c].astype(str).unique())
+    if unlabeled_category is not None:
+        labels.discard(str(unlabeled_category))
+    labels = sorted(labels)
+    base = sc.pl.palettes.default_102
+    cmap = {lab: base[i % len(base)] for i, lab in enumerate(labels)}
+    if unlabeled_category is not None:
+        cmap[str(unlabeled_category)] = "lightgray"
+    return cmap
+
+
+def _plot_umap_on_data_with_legend(adata, col, color_map, size=None, save=None):
     """UMAP with small, non-bold on-data labels *and* a right-margin legend.
 
-    scanpy's `legend_loc` is either 'on data' or 'right margin', never both, so
-    we draw the small on-data labels through scanpy and add the categorical
-    colour legend ourselves from the palette scanpy stores in `uns`. Used for the
-    scANVI label / prediction overlays, which have many fine-grained cell types
-    whose on-data labels overlap — the side legend stays readable regardless.
-
-    If `unlabeled_category` is given and present in `col`, those seed cells are
-    forced to light grey so the reference-matched labels stand out (only the
-    scanvi_labels overlay carries it; C_scANVI predictions never do).
+    scanpy's `legend_loc` is either 'on data' or 'right margin', never both, so we
+    draw the small on-data labels through scanpy and add the categorical colour
+    legend ourselves. `color_map` is a fixed {category: colour} dict (shared across
+    overlays so colours are consistent; unmapped categories fall back to light
+    grey). `size` is a scalar or per-cell matplotlib point size; `save` overrides
+    the output filename.
     """
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
 
-    # Ensure a stable categorical so the palette scanpy writes to uns lines up
-    # with the categories we build the legend from (scANVI predictions come back
-    # as a plain object column, not a categorical).
+    # Stable categorical so the palette we write to uns lines up with the legend
+    # (scANVI predictions come back as a plain object column, not a categorical).
     if not isinstance(adata.obs[col].dtype, pd.CategoricalDtype):
         adata.obs[col] = adata.obs[col].astype("category")
     cats = list(adata.obs[col].cat.categories)
-
-    # Force the unlabeled/"Unknown" seed cells to light grey so the reference-
-    # matched labels stand out. We pre-set the palette in uns — giving every
-    # other category the same default colour scanpy would have picked (same
-    # size thresholds) — so both the scatter and the legend below honour it.
-    if unlabeled_category is not None and unlabeled_category in cats:
-        n = len(cats)
-        base = (sc.pl.palettes.default_20 if n <= 20
-                else sc.pl.palettes.default_28 if n <= 28
-                else sc.pl.palettes.default_102)
-        palette = [base[i % len(base)] for i in range(n)]
-        palette[cats.index(unlabeled_category)] = "lightgray"
-        adata.uns[f"{col}_colors"] = palette
+    palette = [color_map.get(str(c), "lightgray") for c in cats]
+    adata.uns[f"{col}_colors"] = palette
 
     fig, ax = plt.subplots(figsize=(8, 7))
     sc.pl.umap(adata,
                color=col,
                ax=ax,
+               size=size,
                legend_loc="on data",
                legend_fontsize=5,
                legend_fontweight="normal",
                legend_fontoutline=1,
                show=False)
 
-    colors = adata.uns.get(f"{col}_colors")
-    if colors is not None and len(colors) >= len(cats):
-        handles = [Patch(facecolor=colors[i], label=str(cats[i]))
-                   for i in range(len(cats))]
-        ax.legend(handles=handles,
-                  loc="center left",
-                  bbox_to_anchor=(1.02, 0.5),
-                  frameon=False,
-                  fontsize=6,
-                  ncol=2 if len(cats) > 20 else 1,
-                  title=col,
-                  title_fontsize=7)
+    handles = [Patch(facecolor=palette[i], label=str(cats[i]))
+               for i in range(len(cats))]
+    ax.legend(handles=handles,
+              loc="center left",
+              bbox_to_anchor=(1.02, 0.5),
+              frameon=False,
+              fontsize=6,
+              ncol=2 if len(cats) > 20 else 1,
+              title=col,
+              title_fontsize=7)
 
     figdir = str(sc.settings.figdir)
     os.makedirs(figdir, exist_ok=True)
-    # Match scanpy's own naming (umap<save>) so downstream expectations hold;
-    # `save` overrides the filename for the per-stage diagnostic embeddings.
+    # Match scanpy's own naming (umap<save>) so downstream expectations hold.
     fig.savefig(os.path.join(figdir, save or f"umap_{col}_merge.png"),
                 dpi=150, bbox_inches="tight")
     plt.close(fig)
-
-
-def plot_stage_embedding(adata, rep_key, label_col, tag, unlabeled_category=None):
-    """Diagnostic: UMAP on `rep_key` coloured by the *reference* labels
-    `label_col` (no scANVI propagation), saved as umap_stage_<tag>_merge.png.
-
-    Lets you compare how each stage of Method A — scVI, scANVI #1 (integration),
-    scANVI #2 (annotation) — reshapes the manifold, all coloured by the same
-    input labels. The UMAP coords are stashed under obsm['X_umap_<tag>'] so the
-    main clustering UMAP (built later on the integration embedding) is unaffected.
-    """
-    if rep_key not in adata.obsm or label_col not in adata.obs.columns:
-        print(f"  [stage plot] skip '{tag}': missing {rep_key} or {label_col}")
-        return
-    sc.pp.neighbors(adata, use_rep=rep_key)
-    sc.tl.umap(adata)
-    adata.obsm[f"X_umap_{tag}"] = adata.obsm["X_umap"].copy()
-    _plot_umap_on_data_with_legend(adata, label_col, unlabeled_category,
-                                   save=f"umap_stage_{tag}_merge.png")
 
 
 def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep,
@@ -237,9 +222,23 @@ def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep,
                 show=False,
                 save=f"_merge.png")
 
-    for col in (extra_colors or []):
-        if col in adata.obs.columns:
-            _plot_umap_on_data_with_legend(adata, col, unlabeled_category)
+    # Overlay the scANVI label / prediction columns with CONSISTENT colours (one
+    # shared palette across scanvi_labels and C_scANVI). Labelled points are drawn
+    # slightly larger than scanpy's default; the grey unlabeled seed cells stay at
+    # the default size — so C_scANVI (no Unknown) is uniformly enlarged, while the
+    # scanvi_labels overlay only enlarges the reference-matched cells.
+    if extra_colors:
+        color_map = _shared_label_colors(adata, extra_colors, unlabeled_category)
+        base_size = 120000 / adata.n_obs          # scanpy's default point size
+        big_size = base_size * 1.7
+        unlab = str(unlabeled_category) if unlabeled_category is not None else None
+        for col in extra_colors:
+            if col not in adata.obs.columns:
+                continue
+            vals = adata.obs[col].astype(str).to_numpy()
+            size = (np.where(vals == unlab, base_size, big_size)
+                    if unlab is not None else np.full(adata.n_obs, big_size))
+            _plot_umap_on_data_with_legend(adata, col, color_map, size=size)
 
 
 # -----------------------------
@@ -305,15 +304,10 @@ def run_scvi(adata, batch_keys, n_hvg, n_latent, max_epochs):
     return model
 
 
-def run_scanvi(adata, scvi_model, labels_key, unlabeled_category, max_epochs,
-               rep_key="X_scANVI", pred_key="C_scANVI"):
-    """Fine-tune scANVI from a trained scVI model.
+def run_scanvi(adata, scvi_model, labels_key, unlabeled_category, max_epochs):
+    """Fine-tune scANVI from a trained scVI model -> adata.obsm['X_scANVI'].
 
-    Stores the latent representation in ``adata.obsm[rep_key]`` (when not None)
-    and the predicted labels in ``adata.obs[pred_key]`` (when not None). Method A
-    calls this twice on one scVI base: once with the coarse *integration* labels
-    (keep the embedding used downstream) and once with the *fine* labels (keep the
-    predictions used for annotation).
+    Stores predicted labels in adata.obs['C_scANVI'].
     """
     import scvi
 
@@ -328,10 +322,8 @@ def run_scanvi(adata, scvi_model, labels_key, unlabeled_category, max_epochs,
     )
     scanvi_model.train(max_epochs=max_epochs, accelerator="auto")
 
-    if rep_key is not None:
-        adata.obsm[rep_key] = scanvi_model.get_latent_representation()
-    if pred_key is not None:
-        adata.obs[pred_key] = scanvi_model.predict(adata_hvg)
+    adata.obsm["X_scANVI"] = scanvi_model.get_latent_representation()
+    adata.obs["C_scANVI"] = scanvi_model.predict(adata_hvg)
     return scanvi_model
 
 
@@ -349,49 +341,20 @@ def _norm_barcode(bc):
     return m.group(0) if m else None
 
 
-def _apply_ref_column(ref, col, ref_bc, ds_bc, target, dataset, unlabeled_category):
-    """Barcode-match one reference column onto `target` for one dataset's cells."""
-    if col is None:
-        return
-    if col not in ref.obs.columns:
-        print(f"  [labels] dataset '{dataset}': column '{col}' absent in reference "
-              f"obs ({list(ref.obs.columns)[:10]} ...); leaving those cells "
-              f"as '{unlabeled_category}'")
-        return
-    ref_map = pd.Series(ref.obs[col].astype(str).values, index=ref_bc.values)
-    ref_map = ref_map[~ref_map.index.duplicated(keep="first")]
-    mapped = ds_bc.map(ref_map)
-    matched = mapped.notna()
-    target.loc[matched[matched].index] = mapped[matched].values
-    print(f"  [labels] dataset '{dataset}' [{col}]: matched "
-          f"{int(matched.sum())}/{len(ds_bc)} cells")
-
-
 def build_scanvi_labels(adata, dataset_key, label_datasets, label_refs,
-                        label_columns, label_columns_fine, unlabeled_category,
-                        int_key="scanvi_labels", fine_key="scanvi_labels_fine"):
-    """Assemble TWO label columns from per-dataset reference h5ads (Method A).
+                        label_columns, unlabeled_category):
+    """Assemble a single labels column from per-dataset reference h5ads.
 
-    `label_columns` gives the coarse *integration* label per source (drives
-    scANVI #1 / the embedding); `label_columns_fine` gives the *fine* annotation
-    label (drives scANVI #2 / the predictions). Both are read in a single pass
-    over each reference and matched by cell barcode. Cells with no match — and all
-    datasets without a label source — stay `unlabeled_category`. When a fine
-    column is not supplied for a source it falls back to the integration column.
-
-    Returns (int_key, fine_key) — the two obs columns written on `adata`.
+    For each (dataset, reference_h5ad, label_column) triple, cells of that
+    dataset get their label by barcode-matching against the reference. Cells
+    with no match — and all datasets without a label source — stay
+    `unlabeled_category` (scANVI treats them as unlabeled).
     """
-    int_labels = pd.Series(unlabeled_category, index=adata.obs_names, dtype=object)
-    fine_labels = pd.Series(unlabeled_category, index=adata.obs_names, dtype=object)
+    labels = pd.Series(unlabeled_category, index=adata.obs_names, dtype=object)
     bc_norm = adata.obs["barcodes"].map(_norm_barcode) if "barcodes" in adata.obs else \
         pd.Series(adata.obs_names, index=adata.obs_names).map(_norm_barcode)
 
-    # Fall back to the integration column where no fine column is given.
-    fine_cols = list(label_columns_fine or [])
-    fine_cols += list(label_columns[len(fine_cols):])
-
-    for dataset, ref_path, col_int, col_fine in zip(
-            label_datasets, label_refs, label_columns, fine_cols):
+    for dataset, ref_path, col in zip(label_datasets, label_refs, label_columns):
         mask_ds = adata.obs[dataset_key].astype(str) == dataset
         n_ds = int(mask_ds.sum())
         if n_ds == 0:
@@ -403,27 +366,34 @@ def build_scanvi_labels(adata, dataset_key, label_datasets, label_refs,
             continue
 
         ref = read_h5ad(ref_path)
+        if col not in ref.obs.columns:
+            print(f"  [labels] dataset '{dataset}': column '{col}' absent in "
+                  f"reference obs ({list(ref.obs.columns)[:10]} ...); "
+                  f"leaving {n_ds} cells as '{unlabeled_category}'")
+            continue
+
         ref_bc = pd.Series(ref.obs_names, index=ref.obs_names).map(_norm_barcode)
+        ref_map = pd.Series(ref.obs[col].astype(str).values, index=ref_bc.values)
+        ref_map = ref_map[~ref_map.index.duplicated(keep="first")]
+
         ds_bc = bc_norm[mask_ds]
-        _apply_ref_column(ref, col_int, ref_bc, ds_bc, int_labels, dataset,
-                          unlabeled_category)
-        _apply_ref_column(ref, col_fine, ref_bc, ds_bc, fine_labels, dataset,
-                          unlabeled_category)
+        mapped = ds_bc.map(ref_map)
+        matched = mapped.notna()
+        labels.loc[matched[matched].index] = mapped[matched].values
+        print(f"  [labels] dataset '{dataset}': matched "
+              f"{int(matched.sum())}/{n_ds} cells from column '{col}'")
 
-    for name, labels, key in [("integration", int_labels, int_key),
-                              ("fine", fine_labels, fine_key)]:
-        n_labeled = int((labels != unlabeled_category).sum())
-        print(f"  [labels] {name} ({key}): {n_labeled}/{adata.n_obs} labeled; "
-              f"{labels[labels != unlabeled_category].nunique()} cell types")
-        if n_labeled == 0:
-            raise ValueError(
-                f"scANVI selected but no cells could be labeled for the {name} "
-                "column. Check BatchCorrection.scanvi.label_sources paths / "
-                "column names (label_column / label_column_fine)."
-            )
-        adata.obs[key] = pd.Categorical(labels)
+    n_labeled = int((labels != unlabeled_category).sum())
+    print(f"  [labels] total labeled: {n_labeled}/{adata.n_obs} cells; "
+          f"{labels[labels != unlabeled_category].nunique()} cell types")
+    if n_labeled == 0:
+        raise ValueError(
+            "scANVI selected but no cells could be labeled. Check the "
+            "BatchCorrection.scanvi.label_sources paths / column names."
+        )
 
-    return int_key, fine_key
+    adata.obs["scanvi_labels"] = pd.Categorical(labels)
+    return "scanvi_labels"
 
 
 def initialize_parser():
@@ -446,13 +416,10 @@ def initialize_parser():
                         help="None -> scvi-tools auto heuristic")
     parser.add_argument('--scanvi_max_epochs', type=int, default=20)
     parser.add_argument('--unlabeled_category', type=str, default='Unknown')
-    # Per-dataset label sources for scANVI (parallel lists). `label_columns` is
-    # the coarse integration label (scANVI #1); `label_columns_fine` is the fine
-    # annotation label (scANVI #2) — both read from the harmonized reference.
+    # Per-dataset label sources for scANVI (parallel lists)
     parser.add_argument('--label_datasets', type=str, nargs='*', default=[])
     parser.add_argument('--label_refs', type=str, nargs='*', default=[])
     parser.add_argument('--label_columns', type=str, nargs='*', default=[])
-    parser.add_argument('--label_columns_fine', type=str, nargs='*', default=[])
     return parser
 
 
@@ -488,8 +455,6 @@ def main():
     print(f"2. Batch correction ({method})")
     start = timeit.default_timer()
     extra_colors = []
-    stage_reps = []          # (obsm_key, tag) embeddings to plot per stage (scanvi)
-    stage_label_col = None   # reference labels to colour those stage plots by
     if method == "harmony":
         use_rep = run_harmony(adata, batch_keys)
     elif method == "scvi":
@@ -497,43 +462,20 @@ def main():
                               args.scvi_max_epochs)
         use_rep = "X_scVI"
     elif method == "scanvi":
-        # Method A (double scANVI): train scVI once, then fine-tune two heads on
-        # it — #1 on the coarse integration labels (its embedding X_scANVI drives
-        # clustering) and #2 on the fine labels (its predictions C_scANVI are the
-        # annotation). The two label columns come from the harmonized references.
-        int_key, fine_key = build_scanvi_labels(
+        # scANVI always trains scVI first, then fine-tunes with labels.
+        labels_key = build_scanvi_labels(
             adata, dataset_key, args.label_datasets, args.label_refs,
-            args.label_columns, args.label_columns_fine, args.unlabeled_category)
+            args.label_columns, args.unlabeled_category)
         scvi_model = run_scvi(adata, batch_keys, args.n_hvg, args.n_latent,
                               args.scvi_max_epochs)
-        # #1 integration -> keep embedding (X_scANVI); coarse predictions kept for QC.
-        run_scanvi(adata, scvi_model, int_key, args.unlabeled_category,
-                   args.scanvi_max_epochs, rep_key="X_scANVI",
-                   pred_key="C_scANVI_integration")
-        # #2 annotation -> keep fine predictions (C_scANVI); its embedding
-        # (X_scANVI_fine) is kept only for the per-stage diagnostic plot below.
-        run_scanvi(adata, scvi_model, fine_key, args.unlabeled_category,
-                   args.scanvi_max_epochs, rep_key="X_scANVI_fine",
-                   pred_key="C_scANVI")
+        run_scanvi(adata, scvi_model, labels_key, args.unlabeled_category,
+                   args.scanvi_max_epochs)
         use_rep = "X_scANVI"
-        extra_colors = [int_key, "C_scANVI"]
-        stage_reps = [("X_scVI", "scvi"),
-                      ("X_scANVI", "scanvi_int"),
-                      ("X_scANVI_fine", "scanvi_fine")]
-        stage_label_col = fine_key
+        extra_colors = [labels_key, "C_scANVI"]
     else:
         raise ValueError(f"Unknown method '{method}'")
     stop = timeit.default_timer()
     print(f"Batches corrected in {round(stop-start,2)}s (rep: {use_rep})")
-
-    if stage_reps:
-        print("2b. Per-stage embedding plots (coloured by reference labels, no propagation)")
-        start = timeit.default_timer()
-        for rep, tag in stage_reps:
-            plot_stage_embedding(adata, rep, stage_label_col, tag,
-                                 args.unlabeled_category)
-        stop = timeit.default_timer()
-        print(f"Stage plots done in {round(stop-start,2)}s")
 
     print("3. Clustering")
     start = timeit.default_timer()
