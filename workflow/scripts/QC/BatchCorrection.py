@@ -3,10 +3,56 @@ import re
 import json
 import argparse
 import timeit
+import colorsys
 import anndata as ad
 import scanpy as sc
 import scanpy.external as sce
 import pandas as pd
+
+
+# -----------------------------
+# Categorical palette (large N)
+# -----------------------------
+def build_distinct_palette(n):
+    """Return `n` visually distinct hex colours for a categorical variable.
+
+    scanpy falls back to low-contrast / shaded palettes beyond ~28 categories,
+    and because samples are ordered by name, look-alike colours end up next to
+    each other. We walk the HSV wheel in golden-angle (~137.5 deg) steps so
+    *consecutive* categories (alphabetically adjacent sample names) land far
+    apart in hue, and rotate through four saturation/value tiers so any near-hue
+    repeat at high `n` still differs in brightness. Pure stdlib — no new deps.
+    """
+    golden = 0.6180339887498949  # 1/phi -> ~137.5 deg hue steps
+    tiers = ((0.78, 1.00), (1.00, 0.62), (0.48, 0.95), (0.95, 0.42))
+    palette = []
+    for i in range(n):
+        h = (i * golden) % 1.0
+        s, v = tiers[i % len(tiers)]
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        palette.append("#{:02x}{:02x}{:02x}".format(
+            round(r * 255), round(g * 255), round(b * 255)))
+    return palette
+
+
+def apply_distinct_palette(adata, keys, min_categories=21):
+    """Attach the high-contrast palette to big categorical obs columns.
+
+    Only columns with at least `min_categories` levels are overridden — smaller
+    ones keep scanpy's already-distinct tab10 / default_20. Colours are written
+    to ``uns['<key>_colors']``, which scanpy honours for every subsequent plot
+    and which persists into the written h5ad.
+    """
+    for key in keys:
+        if not key or key not in adata.obs.columns:
+            continue
+        col = adata.obs[key]
+        if not isinstance(col.dtype, pd.CategoricalDtype):
+            col = col.astype("category")
+            adata.obs[key] = col
+        n = len(col.cat.categories)
+        if n >= min_categories:
+            adata.uns[f"{key}_colors"] = build_distinct_palette(n)
 
 
 def read_h5ad(path):
@@ -231,6 +277,10 @@ def clustering(adata, sample_key, donor_key, dataset_key, is_filtered, use_rep,
     # saves with bbox_inches='tight', so the right panel's (long) sample legend
     # is fully included. Fall back to donor if no dataset column is present.
     batch_key = dataset_key if (dataset_key and dataset_key in adata.obs.columns) else donor_key
+    # High-contrast palette for the many-category batch covariates (samples /
+    # donors), so alphabetically adjacent samples are not drawn in look-alike
+    # shades. Small columns (e.g. dataset) keep scanpy's default palette.
+    apply_distinct_palette(adata, [dataset_key, donor_key, sample_key])
     sc.pl.umap(adata,
                 color=[batch_key, sample_key],
                 wspace=0.5,
