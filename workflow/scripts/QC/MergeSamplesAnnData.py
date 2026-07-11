@@ -52,6 +52,38 @@ def apply_distinct_palette(adata, keys, min_categories=21):
             adata.uns[f"{key}_colors"] = build_distinct_palette(n)
 
 
+def _sanitize_for_write(adata):
+    """Make an outer-joined AnnData writable to .h5ad.
+
+    Two artefacts of the union (outer) merge trip anndata's h5ad writer:
+
+    * The var index is *named* 'gene_symbols' while a differing 'gene_symbols'
+      column exists (var_names_make_unique suffixes duplicate symbols such as
+      'TBCE' -> 'TBCE-1'); anndata refuses to write an index whose name matches
+      a column with different values.
+    * Boolean columns (the mt / ribo / hb QC flags) get upcast to ``object``
+      dtype when reindexing to the gene union introduces NaN. anndata then
+      serialises them as strings and h5py raises "Can't implicitly convert
+      non-string objects to strings".
+
+    Clear any index name that collides with a column, and cast all-boolean
+    object columns back to a real bool dtype (missing -> False). String and
+    numeric columns are left untouched.
+    """
+    for frame in (adata.var, adata.obs):
+        if frame.index.name in frame.columns:
+            frame.index.name = None
+        for col in frame.columns:
+            s = frame[col]
+            if s.dtype != object:
+                continue
+            non_null = s.dropna()
+            if len(non_null) and all(
+                type(v).__name__ in ("bool", "bool_") for v in non_null
+            ):
+                frame[col] = s.fillna(False).astype(bool)
+
+
 # -----------------------------
 # Functions
 # -----------------------------
@@ -95,18 +127,6 @@ def merge_data(input_files, samples, donor_key, sample_key, dataset_key=None):
                 adata_concat.obs[col],
                 categories=sorted(adata_concat.obs[col].unique())
             )
-
-    # anndata refuses to write a frame whose index *name* also exists as a
-    # column with different values. The per-sample objects set the var index
-    # from the 'gene_symbols' column (so the index is *named* 'gene_symbols'),
-    # and var_names_make_unique() suffixes duplicate symbols in the index only
-    # (e.g. 'TBCE' -> 'TBCE-1') — so the unique index no longer matches the
-    # 'gene_symbols' column. The union (outer) join surfaces those duplicates,
-    # tripping the write. Drop the (purely nominal) index name so the write
-    # succeeds; the original symbols stay available in the 'gene_symbols' column.
-    for frame in (adata_concat.var, adata_concat.obs):
-        if frame.index.name in frame.columns:
-            frame.index.name = None
 
     return adata_concat
 
@@ -255,6 +275,7 @@ def main():
     # 4. Write data
     print("4. Write data")
     start = timeit.default_timer()
+    _sanitize_for_write(adata)
     adata.write_h5ad(output_file)
     stop = timeit.default_timer()
     print(f"Data written in {round(stop-start,2)}s")

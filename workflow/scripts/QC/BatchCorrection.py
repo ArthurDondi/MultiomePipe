@@ -56,6 +56,30 @@ def apply_distinct_palette(adata, keys, min_categories=21):
             adata.uns[f"{key}_colors"] = build_distinct_palette(n)
 
 
+def _sanitize_for_write(adata):
+    """Make an AnnData derived from the union-merged object writable to .h5ad.
+
+    The merged object carries a var index *named* 'gene_symbols' alongside a
+    differing 'gene_symbols' column, and boolean QC flags (mt / ribo / hb) that
+    the outer-join reindex upcast to ``object`` dtype. Either trips anndata's
+    h5ad writer (index-name/column clash; "Can't implicitly convert non-string
+    objects to strings"). Clear any index name that collides with a column, and
+    cast all-boolean object columns back to a real bool dtype (missing -> False).
+    """
+    for frame in (adata.var, adata.obs):
+        if frame.index.name in frame.columns:
+            frame.index.name = None
+        for col in frame.columns:
+            s = frame[col]
+            if s.dtype != object:
+                continue
+            non_null = s.dropna()
+            if len(non_null) and all(
+                type(v).__name__ in ("bool", "bool_") for v in non_null
+            ):
+                frame[col] = s.fillna(False).astype(bool)
+
+
 def read_h5ad(path):
     """Read an h5ad, tolerating ``null``-encoded scalars from a newer anndata.
 
@@ -545,13 +569,7 @@ def main():
 
     print("5. Write data")
     start = timeit.default_timer()
-    # anndata refuses to write a frame whose index *name* also matches a column
-    # (see MergeSamplesAnnData): the var index is named 'gene_symbols' while a
-    # 'gene_symbols' column of un-suffixed symbols also exists. Drop the nominal
-    # index name so the write succeeds.
-    for frame in (adata.var, adata.obs):
-        if frame.index.name in frame.columns:
-            frame.index.name = None
+    _sanitize_for_write(adata)
     adata.write_h5ad(output_file)
     stop = timeit.default_timer()
     print(f"Data written in {round(stop-start,2)}s")
