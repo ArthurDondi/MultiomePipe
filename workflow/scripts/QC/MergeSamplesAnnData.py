@@ -96,6 +96,18 @@ def merge_data(input_files, samples, donor_key, sample_key, dataset_key=None):
                 categories=sorted(adata_concat.obs[col].unique())
             )
 
+    # anndata refuses to write a frame whose index *name* also exists as a
+    # column with different values. The per-sample objects set the var index
+    # from the 'gene_symbols' column (so the index is *named* 'gene_symbols'),
+    # and var_names_make_unique() suffixes duplicate symbols in the index only
+    # (e.g. 'TBCE' -> 'TBCE-1') — so the unique index no longer matches the
+    # 'gene_symbols' column. The union (outer) join surfaces those duplicates,
+    # tripping the write. Drop the (purely nominal) index name so the write
+    # succeeds; the original symbols stay available in the 'gene_symbols' column.
+    for frame in (adata_concat.var, adata_concat.obs):
+        if frame.index.name in frame.columns:
+            frame.index.name = None
+
     return adata_concat
 
 def plot_qc_metrics(adata):

@@ -603,6 +603,13 @@ def main():
 
     print("5. Write data")
     start = timeit.default_timer()
+    # anndata refuses to write a frame whose index *name* also matches a column
+    # (see MergeSamplesAnnData): the var index is named 'gene_symbols' while a
+    # 'gene_symbols' column of un-suffixed symbols also exists. Drop the nominal
+    # index name so the write succeeds.
+    for frame in (adata.var, adata.obs):
+        if frame.index.name in frame.columns:
+            frame.index.name = None
     adata.write_h5ad(output_file)
     stop = timeit.default_timer()
     print(f"Data written in {round(stop-start,2)}s")
