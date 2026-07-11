@@ -48,14 +48,9 @@ def _bc_scvi_args(cfg):
             ds = " ".join(str(s["dataset"]) for s in sources)
             refs = " ".join(str(s["reference_h5ad"]) for s in sources)
             cols = " ".join(str(s["label_column"]) for s in sources)
-            # Fine annotation column (scANVI #2); fall back to the integration
-            # column when a source does not define one.
-            cols_fine = " ".join(str(s.get("label_column_fine", s["label_column"]))
-                                 for s in sources)
             parts.append(f"--label_datasets {ds}")
             parts.append(f"--label_refs {refs}")
             parts.append(f"--label_columns {cols}")
-            parts.append(f"--label_columns_fine {cols_fine}")
     return " ".join(parts)
 
 rule CellRangerMkref:
