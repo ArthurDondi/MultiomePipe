@@ -89,12 +89,31 @@ def _sanitize_for_write(adata):
 # -----------------------------
 def merge_data(input_files, samples, donor_key, sample_key, dataset_key=None):
 
-    adatas = [ad.io.read_h5ad(f) for f in sorted(input_files)]
-    #Adding sample name to cell names — use sorted(samples) to match sorted file order
-    for adata, sample in zip(adatas, sorted(samples)):
+    # `input_files[i]` and `samples[i]` arrive parallel: the MergeSamplesAnnData
+    # rule builds both `--input` and `--samples` from the same SAMPLES order, so
+    # file i already belongs to sample i. Sorting the two lists *independently*
+    # (the previous `sorted(input_files)` / `sorted(samples)`) silently re-pairs a
+    # file with the WRONG sample label whenever one sample name is a lexicographic
+    # prefix of another followed by a character that sorts before '/'. Each file is
+    # `QC/RNA/<sample>/Filtering/<sample>_filtered.h5ad`, so after the sample dir
+    # comes '/' (0x2f); '-' (0x2d) and '.' (0x2e) sort *before* it. So e.g.
+    # samples 'BMO' + 'BMO-IMR-DOX' (this project's own hyphen scheme) or
+    # 'S1' + 'S1.rerun' sort their file paths in a different order than their
+    # names, and every affected sample's cells get another sample's
+    # name/donor/dataset — a silent label swap that corrupts all downstream batch
+    # covariates and per-sample biology. Sort the (file, sample) PAIRS together so
+    # the ordering stays deterministic (sorted by sample, as before) *and* the
+    # file->label pairing can never diverge.
+    paired = sorted(zip(input_files, samples), key=lambda fs: fs[1])
+    samples = [sample for _, sample in paired]
+
+    adatas = []
+    for f, sample in paired:
+        adata = ad.io.read_h5ad(f)
         adata.var_names_make_unique()
         adata.obs['barcodes'] = adata.obs_names
-        adata.obs_names = adata.obs_names+'-'+sample
+        adata.obs_names = adata.obs_names + '-' + sample
+        adatas.append(adata)
     print("Concat")
     # Outer join keeps the UNION of genes across samples (missing entries filled
     # with 0), rather than the intersection. An inner join silently dropped any
@@ -108,7 +127,9 @@ def merge_data(input_files, samples, donor_key, sample_key, dataset_key=None):
         join="outer",
         fill_value=0,
         label="sample",
-        keys=sorted(samples)
+        # `samples` is now ordered to match `adatas` (both come from `paired`),
+        # so block i is correctly labelled with sample i.
+        keys=samples
     )
     print("Concat done")
     del adatas
