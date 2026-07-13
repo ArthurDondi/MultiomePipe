@@ -36,6 +36,31 @@ Useful flags: `--annotation-key cell_type` (if you export the *annotated* object
 instead), `--counts-layer counts`. The script prints the chosen label column and
 the cells-per-group table — check that the reference cell types below match.
 
+### From JupyterLab
+
+Don't paste the script body into a cell and rely on the CLI — argparse would try
+to parse the kernel's own `-f <kernel>.json` and fail. Either run it as a script
+(`sys.argv` is set correctly, defaults come from the config):
+
+```python
+%run /path/to/MultiomePipe/inferCNV/export_for_infercnv.py            # uses config defaults
+# %run .../export_for_infercnv.py --input ... --outdir ... --gtf ...  # or explicit paths
+```
+
+or import the function and call it with keyword arguments:
+
+```python
+import sys; sys.path.insert(0, "/path/to/MultiomePipe/inferCNV")
+from export_for_infercnv import run_export
+run_export(
+    input_file="/nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
+    outdir="/nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/input",
+    gtf="/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/gencode.v50.basic.annotation.plusGFP.gtf",
+)
+```
+
+(The CLI now also ignores Jupyter's injected `-f` if you do paste-and-run.)
+
 ## 2. Run inferCNV (R / RStudio)
 
 One-time install:

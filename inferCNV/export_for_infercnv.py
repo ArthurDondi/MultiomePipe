@@ -205,7 +205,39 @@ def write_gene_ordering(gtf_path, genes, outdir):
               "position (scaffolds / GFP / unmatched symbols); inferCNV ignores them.")
 
 
-def main():
+def run_export(input_file=DEF_INPUT, outdir=DEF_OUTDIR, gtf=DEF_GTF,
+               counts_layer="counts", annotation_key=None):
+    """Export a batch-corrected .h5ad into inferCNV inputs.
+
+    Importable/callable from a Jupyter notebook (no argparse involved):
+
+        from export_for_infercnv import run_export
+        run_export(
+            input_file="/nobackup/.../merged.batch_corrected.h5ad",
+            outdir="/nobackup/.../inferCNV/input",
+            gtf="/nobackup/.../gencode.v50.basic.annotation.plusGFP.gtf",
+        )
+    """
+    os.makedirs(outdir, exist_ok=True)
+
+    print(f"[export] reading {input_file}")
+    adata = ad.read_h5ad(input_file)
+    print(f"[export] {adata.n_obs} cells x {adata.n_vars} genes")
+
+    ann_key = pick_annotation_key(adata, annotation_key)
+
+    mat = get_raw_counts(adata, counts_layer)
+    write_matrix(mat, list(adata.var_names), list(adata.obs_names), outdir)
+    write_annotations(adata, ann_key, outdir)
+    write_gene_ordering(gtf, adata.var_names, outdir)
+
+    print(f"[export] DONE -> {outdir}")
+    print("[export] next: run inferCNV/run_infercnv.R in RStudio, pointing "
+          "INPUT_DIR at this folder.")
+    return outdir
+
+
+def main(argv=None):
     p = argparse.ArgumentParser(
         description="Export a batch-corrected .h5ad into inferCNV inputs.")
     p.add_argument("--input", default=DEF_INPUT, help="batch-corrected .h5ad")
@@ -217,24 +249,15 @@ def main():
     p.add_argument("--annotation-key", default=None,
                    help=f"obs column for cell groups (default: first of "
                         f"{ANNOTATION_CANDIDATES} present)")
-    args = p.parse_args()
+    # parse_known_args (not parse_args) so the script still runs unedited from
+    # inside a Jupyter/IPython kernel, which injects its own '-f <kernel>.json'
+    # into sys.argv. Those extra args are reported and ignored, not fatal.
+    args, unknown = p.parse_known_args(argv)
+    if unknown:
+        print(f"[export] ignoring unrecognised args (e.g. Jupyter's -f): {unknown}")
 
-    os.makedirs(args.outdir, exist_ok=True)
-
-    print(f"[export] reading {args.input}")
-    adata = ad.read_h5ad(args.input)
-    print(f"[export] {adata.n_obs} cells x {adata.n_vars} genes")
-
-    ann_key = pick_annotation_key(adata, args.annotation_key)
-
-    mat = get_raw_counts(adata, args.counts_layer)
-    write_matrix(mat, list(adata.var_names), list(adata.obs_names), args.outdir)
-    write_annotations(adata, ann_key, args.outdir)
-    write_gene_ordering(args.gtf, adata.var_names, args.outdir)
-
-    print(f"[export] DONE -> {args.outdir}")
-    print("[export] next: run inferCNV/run_infercnv.R in RStudio, pointing "
-          "INPUT_DIR at this folder.")
+    run_export(args.input, args.outdir, args.gtf,
+               args.counts_layer, args.annotation_key)
 
 
 if __name__ == "__main__":
