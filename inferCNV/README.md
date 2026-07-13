@@ -7,7 +7,7 @@ two-step bridge: export the `.h5ad` to flat files (Python), then run inferCNV (R
 ```
 BatchCorrection  ->  merged.batch_corrected.h5ad
         |
-        |  1) export_for_infercnv.py   (scverse conda env, on the cluster)
+        |  1) run_export_slurm.sh -> export_for_infercnv.py   (scverse env, SLURM)
         v
    inferCNV/input/ : counts.mtx.gz, genes.tsv, barcodes.tsv,
                      metadata.tsv, annotations_celltype.tsv, gene_ordering.tsv
@@ -22,44 +22,36 @@ BatchCorrection  ->  merged.batch_corrected.h5ad
 Reads raw counts from `layers['counts']`, cell groups from `C_scANVI` (the best
 label available at the BatchCorrection stage — there is no manual `cell_type`
 yet), and builds the gene→chromosome ordering from the same GTF used for the
-CellRanger reference. Defaults are filled from `config/config_BMO_combined.yaml`:
+CellRanger reference. All three paths default to `config/config_BMO_combined.yaml`
+values, so on the cluster you usually need no arguments.
+
+**Submit as a SLURM job (recommended).** `run_export_slurm.sh` activates the
+`scverse` env and runs the exporter on the `shortq` queue (2 cpus / 64 GB / 4 h):
+
+```bash
+# from the MultiomePipe/ root
+sbatch inferCNV/run_export_slurm.sh
+```
+
+Any flags are forwarded straight to `export_for_infercnv.py`, so you can override
+the defaults — e.g. a different output dir, or export the *annotated* object:
+
+```bash
+sbatch inferCNV/run_export_slurm.sh --outdir /nobackup/.../inferCNV/input_v2
+sbatch inferCNV/run_export_slurm.sh --input /path/merged.annotated.h5ad --annotation-key cell_type
+```
+
+Conda installed elsewhere? `CONDA_BASE=/path/to/miniconda3 CONDA_ENV=scverse sbatch ...`.
+Logs land in `projects/BMO/logs/inferCNV_export_<jobid>.log`; the exporter prints
+the chosen label column and the cells-per-group table — check that the reference
+cell types in `run_infercnv.R` match.
+
+**Or run it directly** (e.g. on an interactive node), same flags:
 
 ```bash
 conda activate scverse
-python inferCNV/export_for_infercnv.py \
-    --input  /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad \
-    --outdir /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/input \
-    --gtf    /nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/gencode.v50.basic.annotation.plusGFP.gtf
+python inferCNV/export_for_infercnv.py            # uses the config defaults
 ```
-
-Useful flags: `--annotation-key cell_type` (if you export the *annotated* object
-instead), `--counts-layer counts`. The script prints the chosen label column and
-the cells-per-group table — check that the reference cell types below match.
-
-### From JupyterLab
-
-Don't paste the script body into a cell and rely on the CLI — argparse would try
-to parse the kernel's own `-f <kernel>.json` and fail. Either run it as a script
-(`sys.argv` is set correctly, defaults come from the config):
-
-```python
-%run /path/to/MultiomePipe/inferCNV/export_for_infercnv.py            # uses config defaults
-# %run .../export_for_infercnv.py --input ... --outdir ... --gtf ...  # or explicit paths
-```
-
-or import the function and call it with keyword arguments:
-
-```python
-import sys; sys.path.insert(0, "/path/to/MultiomePipe/inferCNV")
-from export_for_infercnv import run_export
-run_export(
-    input_file="/nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/QC/RNA/Merged/BatchCorrection/merged.batch_corrected.h5ad",
-    outdir="/nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/input",
-    gtf="/nobackup/lab_taschner-mandl/arthurdondi/resources/references/hg38/BMO/gencode.v50.basic.annotation.plusGFP.gtf",
-)
-```
-
-(The CLI now also ignores Jupyter's injected `-f` if you do paste-and-run.)
 
 ## 2. Run inferCNV (R / RStudio)
 
