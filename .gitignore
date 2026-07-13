@@ -2,4 +2,6 @@
 #launch.json folder
 .vscode/
 data/Mallet*
-workflow/scripts/QC/__pycache__/
+# Python bytecode caches (anywhere in the tree)
+__pycache__/
+*.pyc
