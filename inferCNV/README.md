@@ -17,6 +17,12 @@ BatchCorrection  ->  merged.batch_corrected.h5ad
    inferCNV/results/<sample>/ : infercnv.png, HMM_CNV_predictions.*, ...
 ```
 
+**One `counts.mtx.gz` covers the whole cohort** — you do *not* need one matrix
+per sample. `run_infercnv.R` loads the single matrix once and column-subsets it
+per sample (`counts[, cells_of_sample]`) before each inferCNV run, so every
+sample still gets its own run and its own `results/<sample>/` folder while
+inferCNV only densifies one sample's cells at a time.
+
 ## 1. Export (Python, on the cluster)
 
 Reads raw counts from `layers['counts']`, cell groups from `C_scANVI` (the best
@@ -39,7 +45,12 @@ the defaults — e.g. a different output dir, or export the *annotated* object:
 ```bash
 sbatch inferCNV/run_export_slurm.sh --outdir /nobackup/.../inferCNV/input_v2
 sbatch inferCNV/run_export_slurm.sh --input /path/merged.annotated.h5ad --annotation-key cell_type
+sbatch inferCNV/run_export_slurm.sh --samples Fetahu_M1 Fetahu_M2   # export only these samples
 ```
+
+`--samples` (default: all) restricts the export to those `obs['sample']` values;
+it errors if a name is not found. You can also leave the export whole and pick
+samples later at the inferCNV step (see `SAMPLES` below).
 
 Conda installed elsewhere? `CONDA_BASE=/path/to/miniconda3 CONDA_ENV=scverse sbatch ...`.
 Logs land in `projects/BMO/logs/inferCNV_export_<jobid>.log`; the exporter prints
@@ -71,6 +82,10 @@ the reference; malignant *Neuroblastoma cell*s become the observations. Pure
 cell-line samples with no normal cells fall back to a reference-less run
 (baseline = mean of all cells). Set `MODE = "joint"` to run the whole cohort at
 once.
+
+Process only some samples with `SAMPLES <- c("BMO-SKNBE2c", "Fetahu_M1")` (empty
+= all); in per-sample mode those are the runs, in joint mode they are the cells
+pooled. It errors on an unknown sample name so a typo can't silently skip one.
 
 Key knobs: `ANALYSIS_MODE` (`"samples"` fast / `"subclusters"` for tumour
 subclones), `USE_HMM`, `NUM_THREADS`, and `SUBSAMPLE_MAX` (cap cells per group

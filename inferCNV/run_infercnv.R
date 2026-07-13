@@ -35,7 +35,12 @@ INPUT_DIR  <- "/nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/in
 # Where inferCNV writes its results (one sub-folder per sample in per-sample mode).
 OUTPUT_DIR <- "/nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/results"
 
-MODE <- "per_sample"          # "per_sample" (28 runs) or "joint" (one run)
+MODE <- "per_sample"          # "per_sample" (one run per sample) or "joint" (one run)
+
+# Which samples to process. Empty vector = ALL samples found in metadata.tsv.
+# In per_sample mode these are looped one run each; in joint mode they are the
+# cells pooled into the single run. e.g. SAMPLES <- c("BMO-SKNBE2c", "Fetahu_M1")
+SAMPLES <- c()
 
 # Cell types treated as the NORMAL / diploid reference. Must match the labels in
 # metadata.tsv$celltype (the exporter prints the available labels; adjust here).
@@ -150,11 +155,23 @@ run_one <- function(cells, out_dir, label) {
   TRUE
 }
 
+# Restrict `all_samples` to the SAMPLES whitelist (empty = keep all); errors
+# loudly on an unknown name so a typo can't silently skip a sample.
+select_samples <- function(all_samples) {
+  if (length(SAMPLES) == 0) return(all_samples)
+  missing <- setdiff(SAMPLES, all_samples)
+  if (length(missing) > 0)
+    stop("SAMPLES not found in metadata: ", paste(missing, collapse = ", "),
+         "\n  available: ", paste(all_samples, collapse = ", "))
+  intersect(all_samples, SAMPLES)   # keeps all_samples' (sorted) order
+}
+
 # ---- dispatch ---------------------------------------------------------------
 if (MODE == "per_sample") {
   stopifnot("sample" %in% colnames(meta))
-  samples <- sort(unique(meta$sample))
-  message(sprintf("Per-sample mode: %d samples.", length(samples)))
+  samples <- select_samples(sort(unique(meta$sample)))
+  message(sprintf("Per-sample mode: %d sample(s)%s.", length(samples),
+                  if (length(SAMPLES) > 0) " (selected)" else ""))
   for (s in samples) {
     cells <- meta$cell[meta$sample == s]
     if (length(cells) < MIN_CELLS_PER_RUN) {
@@ -166,7 +183,15 @@ if (MODE == "per_sample") {
     run_one(cells, out_dir, s)
   }
 } else if (MODE == "joint") {
-  run_one(meta$cell, file.path(OUTPUT_DIR, "joint"), "joint (all samples)")
+  cells <- meta$cell
+  label <- "joint (all samples)"
+  if (length(SAMPLES) > 0) {           # pool only the selected samples
+    stopifnot("sample" %in% colnames(meta))
+    sel <- select_samples(sort(unique(meta$sample)))
+    cells <- meta$cell[meta$sample %in% sel]
+    label <- sprintf("joint (%d selected samples)", length(sel))
+  }
+  run_one(cells, file.path(OUTPUT_DIR, "joint"), label)
 } else {
   stop("MODE must be 'per_sample' or 'joint'.")
 }

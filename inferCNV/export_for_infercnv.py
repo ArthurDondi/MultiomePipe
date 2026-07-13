@@ -206,16 +206,18 @@ def write_gene_ordering(gtf_path, genes, outdir):
 
 
 def run_export(input_file=DEF_INPUT, outdir=DEF_OUTDIR, gtf=DEF_GTF,
-               counts_layer="counts", annotation_key=None):
+               counts_layer="counts", annotation_key=None, samples=None):
     """Export a batch-corrected .h5ad into inferCNV inputs.
 
-    Importable/callable from a Jupyter notebook (no argparse involved):
+    `samples` optionally restricts the export to those obs['sample'] values
+    (default: all samples). Importable/callable from a notebook (no argparse):
 
         from export_for_infercnv import run_export
         run_export(
             input_file="/nobackup/.../merged.batch_corrected.h5ad",
             outdir="/nobackup/.../inferCNV/input",
             gtf="/nobackup/.../gencode.v50.basic.annotation.plusGFP.gtf",
+            samples=["Fetahu_M1", "Fetahu_M2"],   # or None for the whole cohort
         )
     """
     os.makedirs(outdir, exist_ok=True)
@@ -223,6 +225,17 @@ def run_export(input_file=DEF_INPUT, outdir=DEF_OUTDIR, gtf=DEF_GTF,
     print(f"[export] reading {input_file}")
     adata = ad.read_h5ad(input_file)
     print(f"[export] {adata.n_obs} cells x {adata.n_vars} genes")
+
+    if samples:
+        if "sample" not in adata.obs.columns:
+            raise SystemExit("[export] --samples given but obs has no 'sample' column.")
+        present = set(adata.obs["sample"].astype(str).unique())
+        missing = [s for s in samples if s not in present]
+        if missing:
+            raise SystemExit(f"[export] --samples not found: {missing}\n"
+                             f"[export] available: {sorted(present)}")
+        adata = adata[adata.obs["sample"].astype(str).isin(samples)].copy()
+        print(f"[export] subset to {len(samples)} sample(s) -> {adata.n_obs} cells")
 
     ann_key = pick_annotation_key(adata, annotation_key)
 
@@ -249,6 +262,8 @@ def main(argv=None):
     p.add_argument("--annotation-key", default=None,
                    help=f"obs column for cell groups (default: first of "
                         f"{ANNOTATION_CANDIDATES} present)")
+    p.add_argument("--samples", nargs="*", default=None,
+                   help="only export these obs['sample'] values (default: all)")
     # parse_known_args (not parse_args) so the script still runs unedited from
     # inside a Jupyter/IPython kernel, which injects its own '-f <kernel>.json'
     # into sys.argv. Those extra args are reported and ignored, not fatal.
@@ -257,7 +272,7 @@ def main(argv=None):
         print(f"[export] ignoring unrecognised args (e.g. Jupyter's -f): {unknown}")
 
     run_export(args.input, args.outdir, args.gtf,
-               args.counts_layer, args.annotation_key)
+               args.counts_layer, args.annotation_key, args.samples)
 
 
 if __name__ == "__main__":
