@@ -10,6 +10,8 @@ SNP-array CNV BED (hg19)                 inferCNV results/<sample>/
         | 1) liftover_snp_array.py                    |
         v                                             |
   cellline.hg38.bed  --------- 2) compare_cnv_overlap.py --------->  % events & % bp matching
+        |                                             |
+        +----------- 3) plot_cnv_overlay.py ----------+--------->  genome-wide overlay (PNG/PDF)
 ```
 
 Two steps because the two files are on **different genome builds**: the SNP array
@@ -21,13 +23,13 @@ first, then overlapped.
 
 ## Install
 
-Only the liftover step has an extra dependency:
-
 ```bash
-pip install pyliftover          # or: conda install -c bioconda pyliftover
+pip install pyliftover          # step 1 only (or: conda install -c bioconda pyliftover)
+pip install matplotlib          # step 3 only
 ```
 
-`compare_cnv_overlap.py` is pure standard-library Python (no pandas/numpy needed).
+`compare_cnv_overlap.py` (step 2) is pure standard-library Python (no deps). The
+`scverse` conda env already has matplotlib.
 
 ## 1. Lift the SNP array hg19 -> hg38
 
@@ -96,6 +98,32 @@ small table of how the event-match rate moves as the overlap threshold changes.
 Outputs: `<prefix>.summary.tsv` (the table above) and `<prefix>.per_event.tsv`
 (every reference event with its same/opposite overlap and matched flag, for
 inspecting misses).
+
+## 3. Genome-wide overlay plot
+
+```bash
+python inferCNV/snp_array/plot_cnv_overlay.py \
+    -r cellline_SKNBE2c.hg38.bed \
+    -q results/BMO-SKNBE2c/17_HMM_predHMMi6.hmm_mode-samples.pred_cnv_regions.dat \
+    -o results/BMO-SKNBE2c/snp_vs_infercnv.overlay.png \
+    --title BMO-SKNBE2c
+```
+
+Chromosomes 1-22 laid end-to-end along x (add `--include-xy` for X/Y), with three
+stacked bands:
+
+- **reference** — SNP-array segments, gain = red, loss = blue.
+- **query** — inferCNV HMM regions (union of all cell groups, or one via
+  `--group`), same colours.
+- **match** — each reference event decomposed into **matched** (green,
+  same-direction inferCNV overlap), **contradicted** (purple, opposite call), and
+  **missed** (grey, no inferCNV call). The title reports the overall % of
+  reference bp matched / contradicted (identical to the `compare_cnv_overlap.py`
+  "all" row).
+
+`.png` or `.pdf` is chosen from the `-o` extension; `--dpi`, `--width`, `--height`
+tune the raster. Large arm-level events dominate the picture; sub-Mb focal calls
+are a few pixels wide (see resolution caveat below).
 
 ## Caveats worth remembering
 
