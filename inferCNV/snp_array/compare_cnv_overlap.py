@@ -39,6 +39,7 @@ Usage:
         --out-prefix results/BMO-SKNBE2c/snp_vs_infercnv
 """
 
+import os
 import sys
 import argparse
 from collections import defaultdict
@@ -59,13 +60,33 @@ def cn_to_dir(cn, neutral_cn):
     return "neutral"
 
 
-def state_to_dir(state):
-    # inferCNV i6 HMM: 1,2 = loss (0x, 0.5x); 3 = diploid; 4,5,6 = gain (1.5x,2x,3x)
-    if state > 3:
+def state_to_dir(state, neutral_state=3):
+    """inferCNV HMM state -> direction, relative to the model's diploid state.
+    i6 model: states 1,2 loss / 3 neutral / 4,5,6 gain  (neutral_state=3).
+    i3 model: state  1   loss / 2 neutral / 3     gain  (neutral_state=2)."""
+    if state > neutral_state:
         return "gain"
-    if state < 3:
+    if state < neutral_state:
         return "loss"
     return "neutral"
+
+
+def neutral_state_for(query_path, hmm_i=None):
+    """Return (neutral_state, hmm_i). If hmm_i is None, autodetect the HMM model
+    from the pred_cnv_regions filename ('...predHMMi3...' or '...HMMi6...'); default
+    to i6 (inferCNV's own default) if nothing matches. Neutral is the middle state:
+    i3 -> 2, i6 -> 3."""
+    if hmm_i is None:
+        base = os.path.basename(query_path)
+        if "HMMi3" in base:
+            hmm_i = 3
+        elif "HMMi6" in base:
+            hmm_i = 6
+        else:
+            hmm_i = 6
+    if hmm_i not in (3, 6):
+        sys.exit(f"[overlap] --hmm-i must be 3 or 6, got {hmm_i}")
+    return {3: 2, 6: 3}[hmm_i], hmm_i
 
 
 def parse_reference(path, cn_col, neutral_cn):
@@ -98,14 +119,16 @@ def parse_reference(path, cn_col, neutral_cn):
     return events
 
 
-def parse_query(path, group=None):
-    """inferCNV pred_cnv_regions.dat -> {dir: {chrom: [(start,end), ...]}}.
-    Detects the header if present; otherwise assumes the fixed column order
-    cell_group_name, cnv_name, state, chr, start, end."""
-    by_dir = {"gain": defaultdict(list), "loss": defaultdict(list)}
-    groups = defaultdict(int)
-    order = {"cell_group_name": 0, "state": 2, "chr": 3, "start": 4, "end": 5}
+def parse_query_by_group(path, group=None, quiet=False, neutral_state=3):
+    """inferCNV pred_cnv_regions.dat -> {cell_group_name: {dir: {chrom: [merged]}}}.
 
+    Each cell_group_name is one inferCNV group: a cell type in analysis_mode
+    "samples", or a subclone/clone in "subclusters" mode (e.g. 'neuron.neuron_s8').
+    `neutral_state` is the model's diploid state (i6 -> 3, i3 -> 2; see
+    neutral_state_for). Detects the header if present; otherwise assumes the fixed
+    column order cell_group_name, cnv_name, state, chr, start, end. If `group` is
+    given, only that clone is kept."""
+    order = {"cell_group_name": 0, "state": 2, "chr": 3, "start": 4, "end": 5}
     with open(path) as fh:
         lines = [ln.rstrip("\n") for ln in fh if ln.strip()]
     if not lines:
@@ -124,39 +147,102 @@ def parse_query(path, group=None):
         col = order
         data = lines
 
-    n_kept = n_other_group = 0
+    raw = defaultdict(lambda: {"gain": defaultdict(list), "loss": defaultdict(list)})
+    counts = defaultdict(int)
     for ln in data:
         f = ln.split("\t")
         if len(f) <= col["end"]:
             continue
-        grp = f[col["cell_group_name"]] if "cell_group_name" in col and len(f) > col["cell_group_name"] else "NA"
-        groups[grp] += 1
+        gi = col.get("cell_group_name", 0)
+        grp = f[gi] if len(f) > gi else "NA"
+        counts[grp] += 1
         if group is not None and grp != group:
-            n_other_group += 1
             continue
         try:
             state = int(float(f[col["state"]]))
             start, end = int(f[col["start"]]), int(f[col["end"]])
         except ValueError:
             continue
-        d = state_to_dir(state)
+        d = state_to_dir(state, neutral_state)
         if d == "neutral":
             continue
-        by_dir[d][norm_chrom(f[col["chr"]])].append((start, end))
-        n_kept += 1
+        raw[grp][d][norm_chrom(f[col["chr"]])].append((start, end))
 
-    print(f"[overlap] query cell groups found: " +
-          ", ".join(f"{g} ({c})" for g, c in sorted(groups.items())))
+    for grp in raw:
+        for d in ("gain", "loss"):
+            for chrom in raw[grp][d]:
+                raw[grp][d][chrom] = merge_intervals(raw[grp][d][chrom])
+
+    if not quiet:
+        print("[overlap] query groups found: " +
+              ", ".join(f"{g} ({c})" for g, c in sorted(counts.items())))
+    if group is not None and group not in counts:
+        sys.exit(f"[overlap] --group '{group}' not found. Available: {sorted(counts)}")
+    return dict(raw)
+
+
+def union_query(by_group):
+    """Collapse {group: by_dir} into one by_dir unioned (merged) across clones."""
+    union = {"gain": defaultdict(list), "loss": defaultdict(list)}
+    for bd in by_group.values():
+        for d in ("gain", "loss"):
+            for chrom, ivs in bd[d].items():
+                union[d][chrom].extend(ivs)
+    for d in ("gain", "loss"):
+        for chrom in union[d]:
+            union[d][chrom] = merge_intervals(union[d][chrom])
+    return union
+
+
+def parse_query(path, group=None, neutral_state=3):
+    """inferCNV pred_cnv_regions.dat -> single {dir: {chrom: [merged]}}, unioned
+    across all clones (or restricted to one with `group`)."""
+    by_group = parse_query_by_group(path, group, neutral_state=neutral_state)
     if group is not None:
-        print(f"[overlap] restricted to group '{group}': kept {n_kept} region(s), "
-              f"ignored {n_other_group} from other groups")
+        print(f"[overlap] restricted to group '{group}'")
     else:
-        print(f"[overlap] using ALL groups (union): {n_kept} non-neutral region(s)")
+        print(f"[overlap] using ALL groups (union of {len(by_group)} group(s))")
+    return union_query(by_group)
 
-    for d in by_dir:
-        for chrom in by_dir[d]:
-            by_dir[d][chrom] = merge_intervals(by_dir[d][chrom])
-    return by_dir
+
+def parse_groupings(path, quiet=False):
+    """inferCNV observation_groupings.txt -> {subcluster_name: n_cells}.
+
+    R write.table layout: a header row of quoted column names, then one row per
+    cell: "<barcode>" "<Dendrogram Group>" "<color>" "<Annotation Group>" "<color>".
+    The 2nd quoted field (Dendrogram Group) is the subcluster id (e.g. neuron_s8),
+    which matches the suffix of a pred_cnv_regions cell_group_name."""
+    import re
+    counts = defaultdict(int)
+    n = 0
+    with open(path) as fh:
+        for ln in fh:
+            toks = re.findall(r'"([^"]*)"', ln) or ln.split()
+            if not toks or "Dendrogram Group" in toks or len(toks) < 2:
+                continue                       # header / blank / malformed
+            counts[toks[1]] += 1
+            n += 1
+    if not counts:
+        print(f"[overlap] WARNING: no clone sizes parsed from {path}")
+    elif not quiet:
+        print(f"[overlap] groupings: {n} cells across {len(counts)} subcluster(s)")
+    return dict(counts)
+
+
+def clone_size(cell_group_name, sizes):
+    """Resolve a pred_cnv_regions cell_group_name (e.g. 'neuron.neuron_s8') to a
+    cell count from parse_groupings (keyed by subcluster, e.g. 'neuron_s8'): try
+    exact, then the part after the first '.', then the longest subcluster key the
+    name ends with. Returns None if unresolved."""
+    if not sizes:
+        return None
+    if cell_group_name in sizes:
+        return sizes[cell_group_name]
+    tail = cell_group_name.split(".", 1)[1] if "." in cell_group_name else cell_group_name
+    if tail in sizes:
+        return sizes[tail]
+    cands = [k for k in sizes if cell_group_name.endswith(k)]
+    return sizes[max(cands, key=len)] if cands else None
 
 
 # --------------------------------------------------------------------------- #
@@ -297,7 +383,7 @@ def write_tables(rows, summ, prefix, min_overlap):
 
 # --------------------------------------------------------------------------- #
 def run(reference, query_path, cn_col=13, min_overlap=0.5, group=None,
-        neutral_cn=2.0, out_prefix=None):
+        neutral_cn=2.0, out_prefix=None, hmm_i=None):
     events = parse_reference(reference, cn_col, neutral_cn)
     if not events:
         sys.exit("[overlap] no gain/loss events in the reference — nothing to compare.")
@@ -305,7 +391,9 @@ def run(reference, query_path, cn_col=13, min_overlap=0.5, group=None,
     n_loss = sum(e["dir"] == "loss" for e in events)
     print(f"[overlap] reference events: {len(events)} ({n_gain} gain, {n_loss} loss)")
 
-    query = parse_query(query_path, group)
+    neutral_state, hmm_i = neutral_state_for(query_path, hmm_i)
+    print(f"[overlap] inferCNV model: HMMi{hmm_i} (neutral = state {neutral_state})")
+    query = parse_query(query_path, group, neutral_state)
     rows = compare(events, query, min_overlap)
     summ = summarize(rows, min_overlap)
     print_report(summ, rows, min_overlap)
@@ -330,11 +418,15 @@ def main(argv=None):
                    help="copy number treated as diploid/neutral (default 2.0)")
     p.add_argument("--group", default=None,
                    help="restrict inferCNV to one cell_group_name (default: union of all)")
+    p.add_argument("--hmm-i", type=int, choices=(3, 6), default=None,
+                   help="inferCNV HMM model: i3 (1 loss/2 neutral/3 gain) or i6 "
+                        "(1,2 loss/3 neutral/4-6 gain). Default: autodetect from the "
+                        "query filename (predHMMi3 / HMMi6), else i6.")
     p.add_argument("--out-prefix", default=None,
                    help="write <prefix>.per_event.tsv and <prefix>.summary.tsv")
     args = p.parse_args(argv)
     run(args.reference, args.query, args.cn_col, args.min_overlap, args.group,
-        args.neutral_cn, args.out_prefix)
+        args.neutral_cn, args.out_prefix, args.hmm_i)
 
 
 if __name__ == "__main__":

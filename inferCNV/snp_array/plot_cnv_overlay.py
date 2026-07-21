@@ -12,6 +12,13 @@ Chromosomes 1-22 are laid end-to-end along x (add X/Y with --include-xy). Both
 inputs must be on hg38 (lift the array first with liftover_snp_array.py); inferCNV
 is already hg38. Direction rules and parsing are shared with compare_cnv_overlap.py.
 
+In analysis_mode "subclusters" the query has one cell_group_name per clone: pass
+--group to restrict to one, or use plot_clones.py for the per-clone + summary set.
+
+This module also exposes its drawing helpers (build_offsets, draw_dir_band,
+draw_match_band, decompose_match, decorate_genome_axis, legend_handles,
+render_overlay, colours) so plot_clones.py renders identical bands.
+
 Usage:
     python plot_cnv_overlay.py \
         -r cellline.hg38.bed \
@@ -26,7 +33,7 @@ import argparse
 
 # reuse the exact parsing / direction logic from the overlap script (sibling file)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from compare_cnv_overlap import parse_reference, parse_query, norm_chrom  # noqa: E402
+from compare_cnv_overlap import parse_reference, parse_query, neutral_state_for  # noqa: E402
 
 
 # GRCh38 primary-assembly chromosome sizes (bp).
@@ -50,6 +57,9 @@ ROW_Y = {"reference": 2.0, "query": 1.0, "match": 0.0}
 ROW_H = 0.72
 
 
+# --------------------------------------------------------------------------- #
+# geometry / interval helpers
+# --------------------------------------------------------------------------- #
 def intersect(start, end, merged):
     """Clipped sub-intervals of [start,end) covered by sorted merged intervals."""
     out = []
@@ -63,7 +73,7 @@ def intersect(start, end, merged):
 
 
 def build_offsets(chroms):
-    """Cumulative x-offset per chromosome, in the given order."""
+    """Cumulative x-offset per chromosome, in the given order -> (offsets, total)."""
     off, cum = {}, 0
     for c in chroms:
         off[c] = cum
@@ -83,6 +93,133 @@ def bars(items, offsets):
     return xr, skipped
 
 
+def events_dir_items(events, direction):
+    return [(e["chrom"], e["start"], e["end"]) for e in events if e["dir"] == direction]
+
+
+def query_dir_items(query_by_dir, direction):
+    return [(c, s, e) for c, ivs in query_by_dir[direction].items() for s, e in ivs]
+
+
+def decompose_match(events, query_by_dir):
+    """Split each reference event into missed / matched / contradicted bars and
+    tally the bp. Returns a dict with bar lists, totals and pm/pc percentages."""
+    opp = {"gain": "loss", "loss": "gain"}
+    miss, match, contra = [], [], []
+    tot_ref = tot_match = tot_contra = 0
+    for e in events:
+        chrom, s, t, d = e["chrom"], e["start"], e["end"], e["dir"]
+        miss.append((chrom, s, t))                       # grey base = whole event
+        same = intersect(s, t, query_by_dir[d].get(chrom, []))
+        con = intersect(s, t, query_by_dir[opp[d]].get(chrom, []))
+        match += [(chrom, a, b) for a, b in same]
+        contra += [(chrom, a, b) for a, b in con]
+        tot_ref += t - s
+        tot_match += sum(b - a for a, b in same)
+        tot_contra += sum(b - a for a, b in con)
+    pm = 100.0 * tot_match / tot_ref if tot_ref else float("nan")
+    pc = 100.0 * tot_contra / tot_ref if tot_ref else float("nan")
+    return {"miss": miss, "match": match, "contra": contra,
+            "tot_ref": tot_ref, "tot_match": tot_match, "tot_contra": tot_contra,
+            "pm": pm, "pc": pc}
+
+
+# --------------------------------------------------------------------------- #
+# drawing helpers (shared with plot_clones.py)
+# --------------------------------------------------------------------------- #
+def _draw(ax, items, offsets, y, h, color):
+    xr, sk = bars(items, offsets)
+    if xr:
+        ax.broken_barh(xr, (y, h), facecolors=color, edgecolors="none")
+    return sk
+
+
+def draw_dir_band(ax, gain_items, loss_items, offsets, y, h=ROW_H):
+    """A gain/loss band (reference segments or query intervals)."""
+    return (_draw(ax, gain_items, offsets, y, h, C_GAIN)
+            + _draw(ax, loss_items, offsets, y, h, C_LOSS))
+
+
+def draw_match_band(ax, events, query_by_dir, offsets, y, h=ROW_H):
+    """A match band: grey base, then matched (green) and contradicted (purple)
+    overlaid. Returns decompose_match() dict with an added 'skipped' count."""
+    dec = decompose_match(events, query_by_dir)
+    sk = _draw(ax, dec["miss"], offsets, y, h, C_MISS)
+    sk += _draw(ax, dec["match"], offsets, y, h, C_MATCH)
+    sk += _draw(ax, dec["contra"], offsets, y, h, C_CONTRA)
+    dec["skipped"] = sk
+    return dec
+
+
+def decorate_genome_axis(ax, chroms, offsets, genome_len, fontsize=8):
+    """Chromosome separators, centred x tick labels and x limits."""
+    for c in chroms:
+        ax.axvline(offsets[c], color=C_SEP, lw=0.6, zorder=0)
+    ax.axvline(genome_len, color=C_SEP, lw=0.6, zorder=0)
+    ax.set_xticks([offsets[c] + HG38[c] / 2 for c in chroms])
+    ax.set_xticklabels([c.replace("chr", "") for c in chroms], fontsize=fontsize)
+    ax.set_xlim(0, genome_len)
+
+
+def legend_handles(match_only=False):
+    from matplotlib.patches import Patch
+    match = [Patch(facecolor=C_MATCH, label="matched (same dir)"),
+             Patch(facecolor=C_CONTRA, label="contradicted (opp dir)"),
+             Patch(facecolor=C_MISS, label="missed (no call)")]
+    if match_only:
+        return match
+    return [Patch(facecolor=C_GAIN, label="gain"),
+            Patch(facecolor=C_LOSS, label="loss")] + match
+
+
+def genome_chroms(include_xy=False):
+    return [f"chr{i}" for i in range(1, 23)] + (["chrX", "chrY"] if include_xy else [])
+
+
+def render_overlay(out, events, query_by_dir, title="", chroms=None,
+                   width=18.0, height=4.2, dpi=150):
+    """Draw + save the 3-band overlay for one (reference, query) pair. `query_by_dir`
+    is a {dir:{chrom:[merged]}} (e.g. a single clone). Returns the decompose dict
+    (with 'skipped'). Shared by the CLI and plot_clones.py."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if chroms is None:
+        chroms = genome_chroms(False)
+    offsets, genome_len = build_offsets(chroms)
+
+    fig, ax = plt.subplots(figsize=(width, height), constrained_layout=True)
+    sk = draw_dir_band(ax, events_dir_items(events, "gain"),
+                       events_dir_items(events, "loss"), offsets, ROW_Y["reference"])
+    sk += draw_dir_band(ax, query_dir_items(query_by_dir, "gain"),
+                        query_dir_items(query_by_dir, "loss"), offsets, ROW_Y["query"])
+    dec = draw_match_band(ax, events, query_by_dir, offsets, ROW_Y["match"])
+    sk += dec["skipped"]
+
+    decorate_genome_axis(ax, chroms, offsets, genome_len)
+    ax.set_yticks([ROW_Y[r] + ROW_H / 2 for r in ("match", "query", "reference")])
+    ax.set_yticklabels(["match", "query\n(inferCNV)", "reference\n(SNP array)"], fontsize=9)
+    ax.set_ylim(-0.25, ROW_Y["reference"] + ROW_H + 0.25)
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlabel("chromosome", fontsize=9)
+
+    t = title + "  " if title else ""
+    ax.set_title(f"{t}SNP array vs inferCNV  —  "
+                 f"{dec['pm']:.0f}% of reference bp matched, {dec['pc']:.0f}% contradicted",
+                 fontsize=11)
+    ax.legend(handles=legend_handles(), ncol=5, fontsize=8, loc="lower center",
+              bbox_to_anchor=(0.5, -0.32), frameon=False)
+
+    fig.savefig(out, dpi=dpi)
+    plt.close(fig)
+    dec["skipped_total"] = sk
+    return dec
+
+
+# --------------------------------------------------------------------------- #
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -92,6 +229,8 @@ def main(argv=None):
     p.add_argument("--cn-col", type=int, default=13, help="1-based CN column (default 13)")
     p.add_argument("--neutral-cn", type=float, default=2.0)
     p.add_argument("--group", default=None, help="restrict inferCNV to one cell_group_name")
+    p.add_argument("--hmm-i", type=int, choices=(3, 6), default=None,
+                   help="inferCNV HMM model (i3/i6); default: autodetect from filename")
     p.add_argument("--include-xy", action="store_true", help="also plot chrX/chrY")
     p.add_argument("--title", default="", help="plot title (e.g. the sample name)")
     p.add_argument("--width", type=float, default=18.0)
@@ -99,100 +238,18 @@ def main(argv=None):
     p.add_argument("--dpi", type=int, default=150)
     args = p.parse_args(argv)
 
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Patch
-
-    chroms = [f"chr{i}" for i in range(1, 23)]
-    if args.include_xy:
-        chroms += ["chrX", "chrY"]
-    offsets, genome_len = build_offsets(chroms)
-
     events = parse_reference(args.reference, args.cn_col, args.neutral_cn)
-    query = parse_query(args.query, args.group)
+    neutral_state, hmm_i = neutral_state_for(args.query, args.hmm_i)
+    print(f"[plot] inferCNV model: HMMi{hmm_i} (neutral = state {neutral_state})")
+    query = parse_query(args.query, args.group, neutral_state)
+    dec = render_overlay(args.out, events, query, title=args.title,
+                         chroms=genome_chroms(args.include_xy),
+                         width=args.width, height=args.height, dpi=args.dpi)
 
-    # ---- reference band ----
-    ref_gain = [(e["chrom"], e["start"], e["end"]) for e in events if e["dir"] == "gain"]
-    ref_loss = [(e["chrom"], e["start"], e["end"]) for e in events if e["dir"] == "loss"]
-
-    # ---- query band (merged intervals per direction) ----
-    q_gain = [(c, s, e) for c, ivs in query["gain"].items() for s, e in ivs]
-    q_loss = [(c, s, e) for c, ivs in query["loss"].items() for s, e in ivs]
-
-    # ---- match band: decompose each reference event ----
-    opp = {"gain": "loss", "loss": "gain"}
-    miss_bars, match_bars, contra_bars = [], [], []
-    tot_ref = tot_match = tot_contra = 0
-    for e in events:
-        chrom, s, t, d = e["chrom"], e["start"], e["end"], e["dir"]
-        miss_bars.append((chrom, s, t))                       # grey base = whole event
-        same = intersect(s, t, query[d].get(chrom, []))
-        contra = intersect(s, t, query[opp[d]].get(chrom, []))
-        match_bars += [(chrom, a, b) for a, b in same]
-        contra_bars += [(chrom, a, b) for a, b in contra]
-        tot_ref += t - s
-        tot_match += sum(b - a for a, b in same)
-        tot_contra += sum(b - a for a, b in contra)
-
-    # ---- draw ----
-    fig, ax = plt.subplots(figsize=(args.width, args.height), constrained_layout=True)
-    skipped_total = 0
-
-    def draw(items, row, color):
-        nonlocal skipped_total
-        xr, sk = bars(items, offsets)
-        skipped_total += sk
-        if xr:
-            ax.broken_barh(xr, (ROW_Y[row], ROW_H), facecolors=color,
-                           edgecolors="none")
-
-    draw(ref_gain, "reference", C_GAIN)
-    draw(ref_loss, "reference", C_LOSS)
-    draw(q_gain, "query", C_GAIN)
-    draw(q_loss, "query", C_LOSS)
-    draw(miss_bars, "match", C_MISS)       # grey base first ...
-    draw(match_bars, "match", C_MATCH)     # ... then overlay matched (green) ...
-    draw(contra_bars, "match", C_CONTRA)   # ... and contradicted (purple) on top
-
-    # chromosome separators + centered labels
-    for c in chroms:
-        x0 = offsets[c]
-        ax.axvline(x0, color=C_SEP, lw=0.6, zorder=0)
-    ax.axvline(genome_len, color=C_SEP, lw=0.6, zorder=0)
-    ax.set_xticks([offsets[c] + HG38[c] / 2 for c in chroms])
-    ax.set_xticklabels([c.replace("chr", "") for c in chroms], fontsize=8)
-    ax.set_xlim(0, genome_len)
-
-    ax.set_yticks([ROW_Y[r] + ROW_H / 2 for r in ("match", "query", "reference")])
-    ax.set_yticklabels(["match", "query\n(inferCNV)", "reference\n(SNP array)"], fontsize=9)
-    ax.set_ylim(-0.25, ROW_Y["reference"] + ROW_H + 0.25)
-    for spine in ("top", "right", "left"):
-        ax.spines[spine].set_visible(False)
-    ax.tick_params(axis="y", length=0)
-    ax.set_xlabel("chromosome", fontsize=9)
-
-    pm = 100.0 * tot_match / tot_ref if tot_ref else float("nan")
-    pc = 100.0 * tot_contra / tot_ref if tot_ref else float("nan")
-    title = args.title + "  " if args.title else ""
-    ax.set_title(f"{title}SNP array vs inferCNV  —  "
-                 f"{pm:.0f}% of reference bp matched, {pc:.0f}% contradicted",
-                 fontsize=11)
-
-    legend = [Patch(facecolor=C_GAIN, label="gain"),
-              Patch(facecolor=C_LOSS, label="loss"),
-              Patch(facecolor=C_MATCH, label="matched (same dir)"),
-              Patch(facecolor=C_CONTRA, label="contradicted (opp dir)"),
-              Patch(facecolor=C_MISS, label="missed (no call)")]
-    ax.legend(handles=legend, ncol=5, fontsize=8, loc="lower center",
-              bbox_to_anchor=(0.5, -0.32), frameon=False)
-
-    if skipped_total:
-        print(f"[plot] note: skipped {skipped_total} segment(s) on chromosomes not "
-              f"plotted ({'chr1-22' if not args.include_xy else 'chr1-22,X,Y'}).")
-
-    fig.savefig(args.out, dpi=args.dpi)
-    print(f"[plot] reference bp matched: {pm:.1f}%  contradicted: {pc:.1f}%")
+    if dec["skipped_total"]:
+        print(f"[plot] note: skipped {dec['skipped_total']} segment(s) on chromosomes "
+              f"not plotted ({'chr1-22' if not args.include_xy else 'chr1-22,X,Y'}).")
+    print(f"[plot] reference bp matched: {dec['pm']:.1f}%  contradicted: {dec['pc']:.1f}%")
     print(f"[plot] wrote {args.out}")
 
 

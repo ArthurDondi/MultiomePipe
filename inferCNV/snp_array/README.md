@@ -6,12 +6,15 @@ the reference / ground truth**.
 
 ```
 SNP-array CNV BED (hg19)                 inferCNV results/<sample>/
-        |                                17_HMM_predHMMi6.hmm_mode-samples.pred_cnv_regions.dat
-        | 1) liftover_snp_array.py                    |
+        |                                *.hmm_mode-{samples,subclusters}.pred_cnv_regions.dat
+        | 1) liftover_snp_array.py                    |  (+ observation_groupings.txt for clone sizes)
         v                                             |
   cellline.hg38.bed  --------- 2) compare_cnv_overlap.py --------->  % events & % bp matching
         |                                             |
         +----------- 3) plot_cnv_overlay.py ----------+--------->  genome-wide overlay (PNG/PDF)
+        |                                             |
+        +----------- 4) plot_clones.py ---------------+--------->  per-clone overlays + clone summary
+                     (analysis_mode = "subclusters")             (each clone = one query)
 ```
 
 Two steps because the two files are on **different genome builds**: the SNP array
@@ -76,13 +79,19 @@ Only the **direction** of each event is compared (never absolute copy number):
 | source | column | rule |
 |--------|--------|------|
 | SNP array (reference) | copy number, default **col 13** (`--cn-col`) | `>2` gain, `<2` loss, `==2` neutral (ignored) |
-| inferCNV (query) | HMM `state` (1-6, 3 = diploid) | `>3` gain, `<3` loss, `==3` neutral (never emitted) |
+| inferCNV (query) | HMM `state` | `> neutral` gain, `< neutral` loss, `== neutral` (never emitted) |
+
+The neutral state depends on the HMM model: **i6** (states 1-6) is diploid at
+**3**, **i3** (states 1-3) is diploid at **2**. The model is autodetected from the
+query filename (`...predHMMi3...` vs `...HMMi6...`); override with `--hmm-i {3,6}`.
+Getting this wrong flips gains/losses, so check the printed
+`inferCNV model: HMMiN` line.
 
 A reference event **matches** when same-direction inferCNV calls cover at least
 `--min-overlap` (default **0.50**) of its length. Overlapping inferCNV intervals
 are merged per direction first, so base pairs are never double-counted (this also
-unions several `cell_group_name` subclusters cleanly; use `--group` to restrict to
-one).
+unions several `cell_group_name` groups cleanly; use `--group` to restrict to one,
+or `plot_clones.py` to treat each as its own query).
 
 Two headline numbers (SNP array as reference), reported overall and split into
 gains / losses:
@@ -125,6 +134,51 @@ stacked bands:
 tune the raster. Large arm-level events dominate the picture; sub-Mb focal calls
 are a few pixels wide (see resolution caveat below).
 
+## 4. Per-clone plots (analysis_mode = "subclusters")
+
+When inferCNV is run in `subclusters` mode, `pred_cnv_regions.dat` holds one
+`cell_group_name` per clone. `plot_clones.py` treats **each clone as its own
+query** and, in one call per sample, writes:
+
+- one **3-band overlay per clone** (`<prefix>.<clone>.overlay.png`, like step 3) —
+  skip with `--no-overlays`;
+- a **clone summary** (`<prefix>.clones_summary.png`): every clone's *match* band
+  stacked on shared genome axes (a reference band on top for context), rows sorted
+  largest-clone-first, with a **clone-size sidebar**;
+- a **table** (`<prefix>.clones.tsv`): per-clone cell count + % events / % bp
+  matched / % bp contradicted.
+
+```bash
+python inferCNV/snp_array/plot_clones.py \
+    -r cellline_SKNBE2c.hg38.bed \
+    -q results/BMO-SKNBE2c/17_HMM_predHMMi3.leiden.hmm_mode-subclusters.pred_cnv_regions.dat \
+    -g results/BMO-SKNBE2c/infercnv.17_HMM_predHMMi3.leiden.hmm_mode-subclusters.observation_groupings.txt \
+    -o results/BMO-SKNBE2c/snp_vs_infercnv \
+    --title BMO-SKNBE2c
+```
+
+Clone sizes come from `observation_groupings.txt`: its "Dendrogram Group" column
+is the subcluster id (e.g. `neuron_s8`) and matches the suffix of a
+`cell_group_name` (`neuron.neuron_s8`). Without `-g` the plots/table still work but
+show no sizes (rows then sort by % bp matched). `--min-cells N` drops tiny clones.
+
+## Running all samples
+
+`plot_clones.py` handles one sample; loop in the shell, matching each cell line to
+its `results/<sample>/` folder and its lifted array BED:
+
+```bash
+declare -A ARRAY=( [BMO-SKNBE2c]=SKNBE2c  [BMO-CLBGA]=CLBGA )   # sample -> array key
+for s in "${!ARRAY[@]}"; do
+  d=results/$s
+  q=$(ls $d/*hmm_mode-subclusters.pred_cnv_regions.dat | head -1)
+  g=$(ls $d/*observation_groupings.txt | head -1)
+  python inferCNV/snp_array/plot_clones.py \
+      -r arrays/${ARRAY[$s]}.hg38.bed -q "$q" -g "$g" \
+      -o $d/snp_vs_infercnv --title "$s"
+done
+```
+
 ## Caveats worth remembering
 
 - **Relative vs absolute / reference-less runs.** inferCNV reports CN *relative to
@@ -139,4 +193,7 @@ are a few pixels wide (see resolution caveat below).
   (e.g. the intragenic IGF2BP3 deletion, the MIR129-1 gain) are usually invisible
   and will show as unmatched — that is expected, not a bug. Large arm-level events
   (2p/MYCN, 17q, 1p, 6q) are where agreement should appear.
+- **Clones are inferCNV's own subclusters**, not independent truth. Small clones
+  have noisy CNV profiles, so read the summary top-down (largest first) and weight
+  by the size sidebar; a bulk SNP array can't confirm a rare subclone anyway.
 - **Build.** Both files must be hg38 before step 2; don't skip the liftover.
