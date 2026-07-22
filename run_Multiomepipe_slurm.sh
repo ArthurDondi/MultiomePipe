@@ -4,7 +4,7 @@
 #SBATCH --job-name=MultiomePipe 
 #SBATCH --partition=longq      # 30d limit: long enough for the whole workflow
 #SBATCH --qos=longq            # qos must match the partition
-#SBATCH --time=3-00:00:00     # --time=days-hours:minutes:seconds 
+#SBATCH --time=1-00:00:00     # --time=days-hours:minutes:seconds 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1      # this job is only the Snakemake controller
@@ -43,5 +43,5 @@ snakemake \
     --configfile "$CONFIG" \
     --workflow-profile profiles/slurm \
     --jobs 50 \
-    --rerun-triggers mtime params software-env \
-    -p --until BatchCorrection
+    --rerun-triggers mtime params software-env code \
+    -p --until PlottingAnnotationsManual -R BatchCorrection
