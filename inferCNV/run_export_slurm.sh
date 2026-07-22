@@ -48,4 +48,4 @@ echo "exporter  : $SCRIPT_DIR/export_for_infercnv.py"
 echo "extra args: $*"
 echo "======================"
 
-python -u -W ignore "$SCRIPT_DIR/export_for_infercnv.py" "$@"
+python -u -W ignore export_for_infercnv.py "$@"
