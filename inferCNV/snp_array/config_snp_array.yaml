@@ -45,9 +45,21 @@ snp_array:
   # Samples sharing a cell line point at the SAME BED (e.g. IMR DOX/noDOX). Delete
   # any line you have no array for. (BMOalone = organoid, no cancer line -> no array.)
   samples:
-    BMO-SKNBE2c:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNBE2c.hg19.bed
-    #BMO-SKNSH:     /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNSH.hg19.bed
-    BMO-STANB12:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB12.hg19.bed
-    BMO-STANB8:    /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB8.hg19.bed
+    BMO-SKNBE2c:   
+      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNBE2c.hg19.bed
+      cn_col: 13
+      neutral_cn: 4
+    BMO-SKNSH:     
+      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNSH.hg19.bed
+      cn_col: 13
+      neutral_cn: 2
+    BMO-STANB12:   
+      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB12.hg19.bed
+      cn_col: 12
+      neutral_cn: 2
+    BMO-STANB8:    
+      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB8.hg19.bed
+      cn_col: 13
+      neutral_cn: 2
     #BMO-IMR-DOX:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed
     #BMO-IMR-noDOX: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed
