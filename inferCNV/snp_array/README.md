@@ -171,22 +171,43 @@ is the subcluster id (e.g. `neuron_s8`) and matches the suffix of a
 `cell_group_name` (`neuron.neuron_s8`). Without `-g` the plots/table still work but
 show no sizes (rows then sort by % bp matched). `--min-cells N` drops tiny clones.
 
-## Running all samples
+## Running all samples — Snakemake pipeline (SLURM)
 
-`plot_clones.py` handles one sample; loop in the shell, matching each cell line to
-its `results/<sample>/` folder and its lifted array BED:
+`Snakefile` runs steps 1-4 for every sample as a small standalone workflow that
+reuses the repo's SLURM profile (`profiles/slurm`). Per sample it produces
+`Liftover` -> `Compare` -> `Overlay` -> `Clones` (each its own SLURM job, in the
+`envs/snp_array.yaml` conda env).
+
+1. Edit `config_snp_array.yaml`: set `infercnv_results_dir`, `output_dir`, the
+   `chain` path, and one `samples:` entry per sample pointing at its **hg19** array
+   BED (samples that share a cell line — e.g. IMR DOX/noDOX — point at the same
+   file; drop any sample you have no array for).
+2. Submit the controller from the `MultiomePipe/` root:
 
 ```bash
-declare -A ARRAY=( [BMO-SKNBE2c]=SKNBE2c  [BMO-CLBGA]=CLBGA )   # sample -> array key
-for s in "${!ARRAY[@]}"; do
-  d=results/$s
-  q=$(ls $d/*hmm_mode-subclusters.pred_cnv_regions.dat | head -1)
-  g=$(ls $d/*observation_groupings.txt | head -1)
-  python inferCNV/snp_array/plot_clones.py \
-      -r arrays/${ARRAY[$s]}.hg38.bed -q "$q" -g "$g" \
-      -o $d/snp_vs_infercnv --title "$s"
-done
+sbatch inferCNV/snp_array/run_snp_array_slurm.sh
+# or a different config:
+sbatch inferCNV/snp_array/run_snp_array_slurm.sh config/my_snp_array.yaml
 ```
+
+Or run locally:
+
+```bash
+snakemake -s inferCNV/snp_array/Snakefile \
+    --configfile inferCNV/snp_array/config_snp_array.yaml \
+    --workflow-profile profiles/slurm --jobs 20
+```
+
+The controller needs a conda env with `snakemake` + `snakemake-executor-plugin-slurm`
+(`CONDA_ENV` in the runner, default `snakemake`); each rule's own tools come from
+`envs/snp_array.yaml`. Per sample the pipeline writes, under
+`<output_dir>/<sample>/`: `snp_vs_infercnv.summary.tsv` / `.per_event.tsv`,
+`.overlay.png`, `.clones_summary.png` / `.clones.tsv`, and per-clone
+`.<clone>.overlay.png`. The inferCNV pred / groupings files are found by glob (see
+`pred_glob` / `groupings_glob`), preferring the Bayes-filtered `Pnorm` predictions.
+
+To run one sample by hand instead, call the four scripts directly as in sections
+1-4 above.
 
 ## Caveats worth remembering
 

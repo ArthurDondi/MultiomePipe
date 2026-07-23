@@ -1,0 +1,193 @@
+# =============================================================================
+# SNP-array vs inferCNV comparison — Snakemake pipeline (per BMO cell-line sample)
+#
+# A small STANDALONE workflow that sits downstream of inferCNV (which is itself the
+# manual bridge described in inferCNV/README.md). For every sample listed in
+# config_snp_array.yaml it runs the four snp_array/ scripts:
+#
+#   1) Liftover : lift the cell-line SNP-array CNV BED hg19 -> hg38   (liftover_snp_array.py)
+#   2) Compare  : overlap it vs that sample's inferCNV HMM calls      (compare_cnv_overlap.py)
+#   3) Overlay  : genome-wide 3-band overlay (reference/query/match)  (plot_cnv_overlay.py)
+#   4) Clones   : per-clone overlays + clone summary (subclusters)    (plot_clones.py)
+#
+# It reuses the repo's SLURM profile (profiles/slurm). Run from the MultiomePipe/
+# root:
+#
+#   # SLURM (submits each rule as its own job via profiles/slurm):
+#   sbatch inferCNV/snp_array/run_snp_array_slurm.sh
+#
+#   # or locally:
+#   snakemake -s inferCNV/snp_array/Snakefile \
+#       --configfile inferCNV/snp_array/config_snp_array.yaml \
+#       --workflow-profile profiles/slurm --jobs 20
+#
+# inferCNV must already have been run (subclusters mode) so each
+# <infercnv_results_dir>/<sample>/ folder holds a pred_cnv_regions.dat and an
+# observation_groupings.txt. Fill the per-sample array BED paths in the config.
+# =============================================================================
+
+import os
+import re
+import glob
+
+# --- config (pass with --configfile config_snp_array.yaml) -------------------
+CFG       = config["snp_array"]
+SCRIPTS   = workflow.basedir                       # this dir also holds the .py scripts
+OUT       = CFG["output_dir"].rstrip("/")
+RESULTS   = CFG["infercnv_results_dir"].rstrip("/")
+CHAIN     = CFG.get("chain") or ""                 # local over.chain(.gz); "" -> pyliftover downloads
+HMM_I     = CFG.get("hmm_i")                        # 3 / 6 / None (autodetect from filename)
+CN_COL    = CFG.get("cn_col", 13)
+MIN_OVL   = CFG.get("min_overlap", 0.5)
+MAX_NUDGE = CFG.get("max_nudge", 200000)
+PRED_GLOB = CFG.get("pred_glob", "*subclusters*pred_cnv_regions.dat")
+GRP_GLOB  = CFG.get("groupings_glob", "*observation_groupings.txt")
+ARRAYS    = CFG["samples"]                          # {sample: hg19 array BED}
+SAMPLES   = sorted(ARRAYS)
+
+# optional CLI fragments built once from config (empty -> flag omitted)
+HMM_FLAG   = f"--hmm-i {HMM_I}" if HMM_I else ""
+CHAIN_FLAG = f"--chain {CHAIN}" if CHAIN else ""
+
+wildcard_constraints:
+    sample="|".join(re.escape(s) for s in SAMPLES) if SAMPLES else "$^"
+
+
+def _resolve(sample, pattern, what, cfg_key):
+    """Find the single inferCNV file for `sample` matching `pattern`. Prefers the
+    Bayes-filtered (Pnorm) prediction when several match. Errors clearly if none."""
+    d = os.path.join(RESULTS, sample)
+    hits = sorted(glob.glob(os.path.join(d, pattern)))
+    if not hits:
+        raise ValueError(
+            f"[snp_array] no {what} for sample '{sample}' matching '{pattern}' in {d}.\n"
+            f"            Run inferCNV (subclusters mode) first, or fix "
+            f"snp_array.{cfg_key} in the config.")
+    pn = [h for h in hits if "Pnorm" in os.path.basename(h)]   # prefer Bayes-filtered
+    return (pn or hits)[0]
+
+def pred_input(wildcards):
+    return _resolve(wildcards.sample, PRED_GLOB, "pred_cnv_regions file", "pred_glob")
+
+def groupings_input(wildcards):
+    return _resolve(wildcards.sample, GRP_GLOB, "observation_groupings file", "groupings_glob")
+
+def array_input(wildcards):
+    return ARRAYS[wildcards.sample]
+
+
+rule all:
+    input:
+        expand(f"{OUT}/{{sample}}/snp_vs_infercnv.summary.tsv", sample=SAMPLES),
+        expand(f"{OUT}/{{sample}}/snp_vs_infercnv.overlay.png", sample=SAMPLES),
+        expand(f"{OUT}/{{sample}}/snp_vs_infercnv.clones_summary.png", sample=SAMPLES),
+    default_target: True
+    localrule: True
+
+
+rule Liftover:
+    input:
+        array=array_input,
+    output:
+        bed=f"{OUT}/{{sample}}/{{sample}}.array.hg38.bed",
+    params:
+        script=os.path.join(SCRIPTS, "liftover_snp_array.py"),
+        chain=CHAIN_FLAG,
+        max_nudge=MAX_NUDGE,
+    conda:
+        "envs/snp_array.yaml"
+    resources:
+        mem_mb=4000,
+        runtime=30,
+    log:
+        f"{OUT}/logs/Liftover/{{sample}}.log",
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python {params.script} -i {input.array} -o {output.bed} \
+            --max-nudge {params.max_nudge} {params.chain}
+        """
+
+
+rule Compare:
+    input:
+        ref=f"{OUT}/{{sample}}/{{sample}}.array.hg38.bed",
+        pred=pred_input,
+    output:
+        summary=f"{OUT}/{{sample}}/snp_vs_infercnv.summary.tsv",
+        per_event=f"{OUT}/{{sample}}/snp_vs_infercnv.per_event.tsv",
+    params:
+        script=os.path.join(SCRIPTS, "compare_cnv_overlap.py"),
+        prefix=f"{OUT}/{{sample}}/snp_vs_infercnv",
+        cn_col=CN_COL,
+        min_ovl=MIN_OVL,
+        hmm=HMM_FLAG,
+    conda:
+        "envs/snp_array.yaml"
+    resources:
+        mem_mb=2000,
+        runtime=20,
+    log:
+        f"{OUT}/logs/Compare/{{sample}}.log",
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python {params.script} -r {input.ref} -q {input.pred} \
+            --cn-col {params.cn_col} --min-overlap {params.min_ovl} {params.hmm} \
+            --out-prefix {params.prefix}
+        """
+
+
+rule Overlay:
+    input:
+        ref=f"{OUT}/{{sample}}/{{sample}}.array.hg38.bed",
+        pred=pred_input,
+    output:
+        png=f"{OUT}/{{sample}}/snp_vs_infercnv.overlay.png",
+    params:
+        script=os.path.join(SCRIPTS, "plot_cnv_overlay.py"),
+        cn_col=CN_COL,
+        hmm=HMM_FLAG,
+    conda:
+        "envs/snp_array.yaml"
+    resources:
+        mem_mb=4000,
+        runtime=20,
+    log:
+        f"{OUT}/logs/Overlay/{{sample}}.log",
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python {params.script} -r {input.ref} -q {input.pred} \
+            -o {output.png} --cn-col {params.cn_col} {params.hmm} --title "{wildcards.sample}"
+        """
+
+
+rule Clones:
+    input:
+        ref=f"{OUT}/{{sample}}/{{sample}}.array.hg38.bed",
+        pred=pred_input,
+        groupings=groupings_input,
+    output:
+        summary=f"{OUT}/{{sample}}/snp_vs_infercnv.clones_summary.png",
+        table=f"{OUT}/{{sample}}/snp_vs_infercnv.clones.tsv",
+    params:
+        script=os.path.join(SCRIPTS, "plot_clones.py"),
+        prefix=f"{OUT}/{{sample}}/snp_vs_infercnv",
+        cn_col=CN_COL,
+        min_ovl=MIN_OVL,
+        hmm=HMM_FLAG,
+    conda:
+        "envs/snp_array.yaml"
+    resources:
+        mem_mb=4000,
+        runtime=30,
+    log:
+        f"{OUT}/logs/Clones/{{sample}}.log",
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python {params.script} -r {input.ref} -q {input.pred} -g {input.groupings} \
+            -o {params.prefix} --cn-col {params.cn_col} --min-overlap {params.min_ovl} \
+            {params.hmm} --title "{wildcards.sample}"
+        """

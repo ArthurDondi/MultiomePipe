@@ -5,3 +5,5 @@ data/Mallet*
 # Python bytecode caches (anywhere in the tree)
 __pycache__/
 *.pyc
+# Snakemake working metadata (created in the invocation dir)
+.snakemake/

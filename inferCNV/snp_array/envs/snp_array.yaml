@@ -1,0 +1,13 @@
+name: snp_array
+# Env for the SNP-array vs inferCNV comparison pipeline (inferCNV/snp_array/).
+# liftover_snp_array.py needs pyliftover; the plot scripts need matplotlib;
+# compare_cnv_overlap.py is pure standard library.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python >=3.9
+  - matplotlib-base >=3.5
+  - pip
+  - pip:
+      - pyliftover
