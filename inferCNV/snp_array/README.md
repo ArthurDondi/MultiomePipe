@@ -53,18 +53,21 @@ python inferCNV/snp_array/liftover_snp_array.py -i in.hg19.bed -o out.hg38.bed \
 
 Every original column is preserved; only the coordinate columns are rewritten
 (cols 1-3, plus the duplicate start/end/length cols 7/8/11 when they mirror the
-originals). Segments whose endpoints don't map, land on two different hg38
-chromosomes, or change length by more than `--max-len-change` (default 25%) are
-dropped to `<output>.unmapped` with a reason column.
+originals). Segments whose endpoints can't be placed on the source chromosome, or
+that change length by more than `--max-len-change` (default 25%), are dropped to
+`<output>.unmapped` with a reason column.
 
-**Endpoint rescue.** A boundary base in a chain gap (sub-telomeric /
-peri-centromeric sequence has none) would otherwise sink a whole-arm CNV — e.g. a
-91 Mb chr12 gain starting at chr12:149,960 fails because that sub-telomeric base
-has no hg38 counterpart. So an unmappable endpoint is walked **inward** in 1 kb
-steps up to `--max-nudge` bp (default 200 kb; `0` disables) until a base maps; a
-few kb trimmed off a Mb-scale segment is negligible and every rescued segment is
-reported with its trim. The nudge is capped at half the segment so a tiny segment
-with a deep-gap boundary still drops rather than collapsing.
+**Endpoint rescue.** hg19->hg38 keeps a segment on the same chromosome, so both
+endpoints are required to land on the source chromosome. A boundary base in a
+chain gap, or one that maps to a *different* chromosome (sub-telomeric /
+peri-centromeric repeats do both — e.g. a whole-arm chr1 gain whose telomeric end
+maps onto another chromosome, or a 91 Mb chr12 gain starting at the chr12:149,960
+sub-telomere), would otherwise sink a whole-arm CNV. So a bad endpoint is walked
+**inward** in 1 kb steps up to `--max-nudge` bp (default 200 kb; `0` disables)
+until a base maps to the source chromosome; a few kb trimmed off a Mb-scale segment
+is negligible and every rescued segment is reported with its trim. The nudge is
+capped at half the segment so a tiny segment with a deep-gap boundary still drops
+rather than collapsing.
 
 ## 2. Overlap against inferCNV
 
@@ -87,16 +90,18 @@ Only the **direction** of each event is compared (never absolute copy number):
 
 | source | column | rule |
 |--------|--------|------|
-| SNP array (reference) | copy number, default **col 13** (`--cn-col`) | `> neutral` gain, `< neutral` loss, `== neutral` (ignored) |
+| SNP array (reference) | **category**, default **col 4** (`--type-col`) | `gain` / `wc_gain` / `amplification` -> gain; `loss` / `wc_loss` -> loss; else ignored |
 | inferCNV (query) | HMM `state` | `> neutral` gain, `< neutral` loss, `== neutral` (never emitted) |
 
-**Reference baseline (`--neutral-cn`, default 2).** CN is compared to the cell
-line's diploid baseline: below it = loss, above = gain. A **non-diploid** line
-needs this set — e.g. a near-tetraploid sample has ploidy 4, so CN 1/2/3 are all
-losses; run it with `--neutral-cn 4` (or `neutral_cn: 4` in the config). If the
-copy number is in a different column, set `--cn-col`; when `--cn-col` points at a
-non-numeric column every row is dropped as "malformed" and the log prints the
-offending value so you can fix it.
+**Reference direction (`--type-col`, default col 4).** The array caller's own
+category label decides direction — case-insensitive substring match, so
+`wc_gain`/`small_gain`/`mosaic_gain`/`amplification` all read as gain and
+`wc_loss`/`(wc_)loss` as loss (`wc` = whole chromosome). A segment whose category
+has none of those terms is ignored. This sidesteps ploidy entirely (a tetraploid
+line's CN-2/3 losses are labelled `loss`, so they count as losses without any
+baseline setting). `--cn-col` (default 13) is now recorded in the per-event table
+only and never affects direction — a wrong/empty CN column can't zero out the
+reference.
 
 **inferCNV neutral state** depends on the HMM model: **i6** (states 1-6) is diploid
 at **3**, **i3** (states 1-3) is diploid at **2**. The model is autodetected from
@@ -125,14 +130,19 @@ Outputs: `<prefix>.summary.tsv` (the table above) and `<prefix>.per_event.tsv`
 (every reference event with its same/opposite overlap and matched flag, for
 inspecting misses).
 
-## 3. Genome-wide overlay plot
+## 3. Genome-wide overlay plot (one query)
+
+This is the engine behind the per-clone overlays (step 4); run it directly for a
+single clone (`--group <cell_group_name>`) or, without `--group`, for the union of
+all clones. The all-samples pipeline does **not** emit a sample-level union overlay
+(unioning subclones is coarse — the per-clone summary in step 4 is more useful).
 
 ```bash
 python inferCNV/snp_array/plot_cnv_overlay.py \
     -r cellline_SKNBE2c.hg38.bed \
     -q results/BMO-SKNBE2c/17_HMM_predHMMi6.hmm_mode-samples.pred_cnv_regions.dat \
-    -o results/BMO-SKNBE2c/snp_vs_infercnv.overlay.png \
-    --title BMO-SKNBE2c
+    -o snp_vs_infercnv.overlay.png --group neuron.neuron_s1 \
+    --title "BMO-SKNBE2c neuron_s1"
 ```
 
 Chromosomes 1-22 laid end-to-end along x (add `--include-xy` for X/Y), with three
@@ -181,18 +191,18 @@ show no sizes (rows then sort by % bp matched). `--min-cells N` drops tiny clone
 
 ## Running all samples — Snakemake pipeline (SLURM)
 
-`Snakefile` runs steps 1-4 for every sample as a small standalone workflow that
-reuses the repo's SLURM profile (`profiles/slurm`). Per sample it produces
-`Liftover` -> `Compare` -> `Overlay` -> `Clones` (each its own SLURM job, in the
+`Snakefile` runs the pipeline for every sample as a small standalone workflow that
+reuses the repo's SLURM profile (`profiles/slurm`). Per sample it runs
+`Liftover` -> `Compare` -> `Clones` (each its own SLURM job, in the
 `envs/snp_array.yaml` conda env).
 
 1. Edit `config_snp_array.yaml`: set `infercnv_results_dir`, `output_dir`, the
    `chain` path, and one `samples:` entry per sample pointing at its **hg19** array
    BED (samples that share a cell line — e.g. IMR DOX/noDOX — point at the same
    file; drop any sample you have no array for). A sample value may instead be a
-   mapping `{bed:, cn_col:, neutral_cn:}` to override the copy-number column or the
-   diploid baseline for that one sample (e.g. `neutral_cn: 4` for a near-tetraploid
-   line) — see the global `cn_col` / `neutral_cn` and the comment above `samples:`.
+   mapping `{bed:, type_col:, cn_col:}` to override the category / copy-number
+   column for that one sample (rarely needed) — see the global `type_col` / `cn_col`
+   and the comment above `samples:`.
 2. Submit the controller from the `MultiomePipe/` root:
 
 ```bash
@@ -213,12 +223,12 @@ The controller needs a conda env with `snakemake` + `snakemake-executor-plugin-s
 (`CONDA_ENV` in the runner, default `snakemake`); each rule's own tools come from
 `envs/snp_array.yaml`. Per sample the pipeline writes, under
 `<output_dir>/<sample>/`: `snp_vs_infercnv.summary.tsv` / `.per_event.tsv`,
-`.overlay.png`, `.clones_summary.png` / `.clones.tsv`, and per-clone
-`.<clone>.overlay.png`. The inferCNV pred / groupings files are found by glob (see
-`pred_glob` / `groupings_glob`), preferring the Bayes-filtered `Pnorm` predictions.
+`.clones_summary.png` / `.clones.tsv`, and per-clone `.<clone>.overlay.png`. The
+inferCNV pred / groupings files are found by glob (see `pred_glob` /
+`groupings_glob`), preferring the Bayes-filtered `Pnorm` predictions.
 
-To run one sample by hand instead, call the four scripts directly as in sections
-1-4 above.
+To run one sample by hand instead, call the scripts directly as in sections 1-4
+above.
 
 ## Caveats worth remembering
 

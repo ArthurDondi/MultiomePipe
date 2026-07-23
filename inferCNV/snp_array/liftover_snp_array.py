@@ -91,41 +91,40 @@ def lift_point(lo, chrom, pos):
     return tgt_chrom, tgt_pos
 
 
-def lift_point_rescue(lo, chrom, pos, inward, max_nudge, step=1000):
-    """Lift `pos`; if it falls in a chain gap, walk INWARD until a base maps.
-    `inward` is +1 for a start (move right, into the segment) or -1 for an end
-    (move left). Steps by `step` bp up to `max_nudge`. Returns
-    (chrom, mapped_pos, shift_bp) — shift_bp is how far we had to move (0 if the
-    original base mapped) — or None if nothing maps within max_nudge."""
-    r = lift_point(lo, chrom, pos)
-    if r is not None:
-        return r[0], r[1], 0
-    moved = step
+def lift_point_rescue(lo, chrom, pos, want_chrom, inward, max_nudge, step=1000):
+    """Lift `pos`, requiring the result to land on `want_chrom`. hg19->hg38 keeps a
+    segment on the same chromosome, so if an endpoint maps nowhere OR to a different
+    chromosome (common in sub-telomeric / repetitive sequence — the source of both
+    'unmapped_endpoint' and 'endpoints_on_different_chromosomes' drops), walk INWARD
+    until a base maps to `want_chrom`. `inward` is +1 for a start (move right) or -1
+    for an end (move left). Returns (mapped_pos, shift_bp) — shift 0 if the original
+    base was already good — or None if nothing lands on want_chrom within max_nudge."""
+    moved = 0
     while moved <= max_nudge:
         r = lift_point(lo, chrom, pos + inward * moved)
-        if r is not None:
-            return r[0], r[1], moved
+        if r is not None and r[0] == want_chrom:
+            return r[1], moved
         moved += step
     return None
 
 
 def lift_interval(lo, chrom, start, end, max_nudge=0, step=1000):
-    """Lift a BED interval [start, end). end is exclusive, so the last included
-    base is end-1; we lift that and add 1 back. When max_nudge > 0, an unmappable
-    endpoint is walked inward (start right, end left) up to min(max_nudge, ~half
-    the segment) bp so the segment is not dropped for a single unmappable boundary
-    base. Returns (chrom, new_start, new_end, trim_bp) on success — trim_bp is the
-    hg19 bp shaved off the ends by rescue (0 if none) — or (None, reason)."""
+    """Lift a BED interval [start, end). end is exclusive, so the last included base
+    is end-1; we lift that and add 1 back. Both endpoints are required to land on the
+    source chromosome (hg19->hg38 preserves it); when max_nudge > 0 an endpoint that
+    maps nowhere or to another chromosome is walked inward up to min(max_nudge, ~half
+    the segment) bp so a whole-arm/whole-chromosome CNV is not dropped for a single
+    sub-telomeric boundary base. Returns (chrom, new_start, new_end, trim_bp) on
+    success — trim_bp is the hg19 bp shaved off the ends by rescue (0 if none) — or
+    (None, reason)."""
     # cap the nudge so start and end can never cross past each other
     cap = min(max_nudge, max(0, (end - start) // 2 - 1)) if max_nudge else 0
-    a = lift_point_rescue(lo, chrom, start, +1, cap, step)      # start moves right
-    b = lift_point_rescue(lo, chrom, end - 1, -1, cap, step)    # end moves left
+    a = lift_point_rescue(lo, chrom, start, chrom, +1, cap, step)      # start moves right
+    b = lift_point_rescue(lo, chrom, end - 1, chrom, -1, cap, step)    # end moves left
     if a is None or b is None:
         return None, "unmapped_endpoint"
-    if a[0] != b[0]:
-        return None, "endpoints_on_different_chromosomes"
-    lo_pos, hi_pos = sorted((a[1], b[1]))   # handles +/- strand mapping
-    return a[0], lo_pos, hi_pos + 1, a[2] + b[2]
+    lo_pos, hi_pos = sorted((a[0], b[0]))   # handles +/- strand mapping
+    return chrom, lo_pos, hi_pos + 1, a[1] + b[1]
 
 
 def run(input_bed, output_bed, chain=None, from_build="hg19", to_build="hg38",

@@ -30,36 +30,28 @@ snp_array:
 
   # ---- comparison parameters ----------------------------------------------
   hmm_i: 3                 # inferCNV HMM model: 3 (subclusters i3) or 6; null = autodetect from filename
-  cn_col: 13               # 1-based copy-number column in the SNP-array BED (global default)
-  neutral_cn: 2            # diploid baseline: CN < this = loss, > this = gain (global default)
+  type_col: 4              # 1-based CATEGORY column giving event direction:
+                           # gain / wc_gain / amplification -> gain, loss / wc_loss -> loss,
+                           # anything else -> segment ignored (wc = whole chromosome)
+  cn_col: 13               # 1-based copy-number column, recorded in the per-event table
+                           # only (blank if non-numeric) -- does NOT affect direction
   min_overlap: 0.5         # min same-direction overlap of a reference event to count it matched
 
   # ---- samples -> SNP-array CNV BED ----------------------------------------
   # One entry per sample. A value is either a plain hg19 BED path, OR a mapping that
-  # overrides cn_col / neutral_cn for that one sample -- useful when a file has its
-  # copy number in a different column, or the cell line is not diploid:
+  # overrides type_col / cn_col for that one sample (rarely needed):
   #     BMO-STANB8:
   #       bed: /path/STANB8.hg19.bed
-  #       cn_col: 13         # set if this file's CN is NOT in the global cn_col
-  #       neutral_cn: 4      # near-tetraploid: CN 1/2/3 are all losses vs ploidy 4
+  #       type_col: 4        # set if the gain/loss category is in a different column
+  #       cn_col: 12         # set if the copy number is in a different column
   # Samples sharing a cell line point at the SAME BED (e.g. IMR DOX/noDOX). Delete
   # any line you have no array for. (BMOalone = organoid, no cancer line -> no array.)
   samples:
-    BMO-SKNBE2c:   
-      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNBE2c.hg19.bed
-      cn_col: 13
-      neutral_cn: 4
-    BMO-SKNSH:     
-      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNSH.hg19.bed
-      cn_col: 13
-      neutral_cn: 2
-    BMO-STANB12:   
+    BMO-SKNBE2c:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNBE2c.hg19.bed
+    BMO-SKNSH:     /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNSH.hg19.bed
+    BMO-STANB12:
       bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB12.hg19.bed
-      cn_col: 12
-      neutral_cn: 2
-    BMO-STANB8:    
-      bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB8.hg19.bed
-      cn_col: 13
-      neutral_cn: 2
+      cn_col: 12           # this file records copy number in col 12 (recorded value only)
+    BMO-STANB8:    /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB8.hg19.bed
     #BMO-IMR-DOX:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed
     #BMO-IMR-noDOX: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed

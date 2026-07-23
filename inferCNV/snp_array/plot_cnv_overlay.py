@@ -240,8 +240,10 @@ def main(argv=None):
     p.add_argument("-r", "--reference", required=True, help="SNP-array CNV BED (hg38)")
     p.add_argument("-q", "--query", required=True, help="inferCNV pred_cnv_regions.dat")
     p.add_argument("-o", "--out", default="cnv_overlay.png", help="output image (.png/.pdf)")
-    p.add_argument("--cn-col", type=int, default=13, help="1-based CN column (default 13)")
-    p.add_argument("--neutral-cn", type=float, default=2.0)
+    p.add_argument("--type-col", type=int, default=4,
+                   help="1-based category column for event direction (default 4)")
+    p.add_argument("--cn-col", type=int, default=13,
+                   help="1-based copy-number column, recorded only (default 13)")
     p.add_argument("--group", default=None, help="restrict inferCNV to one cell_group_name")
     p.add_argument("--hmm-i", type=int, choices=(3, 6), default=None,
                    help="inferCNV HMM model (i3/i6); default: autodetect from filename")
@@ -252,7 +254,7 @@ def main(argv=None):
     p.add_argument("--dpi", type=int, default=150)
     args = p.parse_args(argv)
 
-    events = parse_reference(args.reference, args.cn_col, args.neutral_cn)
+    events = parse_reference(args.reference, args.type_col, args.cn_col)
     neutral_state, hmm_i = neutral_state_for(args.query, args.hmm_i)
     print(f"[plot] inferCNV model: HMMi{hmm_i} (neutral = state {neutral_state})")
     query = parse_query(args.query, args.group, neutral_state)

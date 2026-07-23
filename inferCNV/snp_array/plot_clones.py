@@ -212,8 +212,10 @@ def main(argv=None):
     p.add_argument("-o", "--out-prefix", required=True,
                    help="output path prefix (writes <prefix>.clones_summary.png, "
                         ".clones.tsv, and <prefix>.<clone>.overlay.png)")
-    p.add_argument("--cn-col", type=int, default=13)
-    p.add_argument("--neutral-cn", type=float, default=2.0)
+    p.add_argument("--type-col", type=int, default=4,
+                   help="1-based category column for event direction (default 4)")
+    p.add_argument("--cn-col", type=int, default=13,
+                   help="1-based copy-number column, recorded only (default 13)")
     p.add_argument("--hmm-i", type=int, choices=(3, 6), default=None,
                    help="inferCNV HMM model (i3/i6); default: autodetect from filename")
     p.add_argument("--min-overlap", type=float, default=0.5)
@@ -228,7 +230,7 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     chroms = genome_chroms(args.include_xy)
-    events = parse_reference(args.reference, args.cn_col, args.neutral_cn)
+    events = parse_reference(args.reference, args.type_col, args.cn_col)
     if not events:
         sys.exit("[clones] no gain/loss events in the reference — nothing to compare.")
     neutral_state, hmm_i = neutral_state_for(args.query, args.hmm_i)

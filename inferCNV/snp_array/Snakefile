@@ -37,16 +37,15 @@ OUT       = CFG["output_dir"].rstrip("/")
 RESULTS   = CFG["infercnv_results_dir"].rstrip("/")
 CHAIN     = CFG.get("chain") or ""                 # local over.chain(.gz); "" -> pyliftover downloads
 HMM_I     = CFG.get("hmm_i")                        # 3 / 6 / None (autodetect from filename)
-CN_COL    = CFG.get("cn_col", 13)
-NEUTRAL   = CFG.get("neutral_cn", 2.0)              # diploid baseline (override per sample)
+TYPE_COL  = CFG.get("type_col", 4)                 # category column -> event direction
+CN_COL    = CFG.get("cn_col", 13)                  # copy number, recorded only
 MIN_OVL   = CFG.get("min_overlap", 0.5)
 MAX_NUDGE = CFG.get("max_nudge", 200000)
 PRED_GLOB = CFG.get("pred_glob", "*subclusters*pred_cnv_regions.dat")
 GRP_GLOB  = CFG.get("groupings_glob", "*observation_groupings.txt")
 # {sample: array BED} — a value may be a plain hg19 BED path, OR a mapping
-# {bed:, cn_col:, neutral_cn:} that overrides the copy-number column and/or the
-# diploid baseline for that one sample (e.g. a near-tetraploid line needs
-# neutral_cn: 4, so CN 1/2/3 all count as losses relative to ploidy 4).
+# {bed:, type_col:, cn_col:} that overrides the category / copy-number column for
+# that one sample (direction comes from the category column, default col 4).
 ARRAYS    = CFG["samples"]
 SAMPLES   = sorted(ARRAYS)
 
@@ -63,9 +62,9 @@ def sample_cn_col(s):
     v = ARRAYS[s]
     return v.get("cn_col", CN_COL) if isinstance(v, dict) else CN_COL
 
-def sample_neutral(s):
+def sample_type_col(s):
     v = ARRAYS[s]
-    return v.get("neutral_cn", NEUTRAL) if isinstance(v, dict) else NEUTRAL
+    return v.get("type_col", TYPE_COL) if isinstance(v, dict) else TYPE_COL
 
 wildcard_constraints:
     sample="|".join(re.escape(s) for s in SAMPLES) if SAMPLES else "$^"
@@ -97,7 +96,6 @@ def array_input(wildcards):
 rule all:
     input:
         expand(f"{OUT}/{{sample}}/snp_vs_infercnv.summary.tsv", sample=SAMPLES),
-        expand(f"{OUT}/{{sample}}/snp_vs_infercnv.overlay.png", sample=SAMPLES),
         expand(f"{OUT}/{{sample}}/snp_vs_infercnv.clones_summary.png", sample=SAMPLES),
     default_target: True
     localrule: True
@@ -137,8 +135,8 @@ rule Compare:
     params:
         script=os.path.join(SCRIPTS, "compare_cnv_overlap.py"),
         prefix=f"{OUT}/{{sample}}/snp_vs_infercnv",
+        type_col=lambda w: sample_type_col(w.sample),
         cn_col=lambda w: sample_cn_col(w.sample),
-        neutral=lambda w: sample_neutral(w.sample),
         min_ovl=MIN_OVL,
         hmm=HMM_FLAG,
     conda:
@@ -152,36 +150,9 @@ rule Compare:
         r"""
         exec > {log} 2>&1
         python {params.script} -r {input.ref} -q {input.pred} \
-            --cn-col {params.cn_col} --neutral-cn {params.neutral} \
+            --type-col {params.type_col} --cn-col {params.cn_col} \
             --min-overlap {params.min_ovl} {params.hmm} \
             --out-prefix {params.prefix}
-        """
-
-
-rule Overlay:
-    input:
-        ref=f"{OUT}/{{sample}}/{{sample}}.array.hg38.bed",
-        pred=pred_input,
-    output:
-        png=f"{OUT}/{{sample}}/snp_vs_infercnv.overlay.png",
-    params:
-        script=os.path.join(SCRIPTS, "plot_cnv_overlay.py"),
-        cn_col=lambda w: sample_cn_col(w.sample),
-        neutral=lambda w: sample_neutral(w.sample),
-        hmm=HMM_FLAG,
-    conda:
-        "envs/snp_array.yaml"
-    resources:
-        mem_mb=4000,
-        runtime=20,
-    log:
-        f"{OUT}/logs/Overlay/{{sample}}.log",
-    shell:
-        r"""
-        exec > {log} 2>&1
-        python {params.script} -r {input.ref} -q {input.pred} \
-            -o {output.png} --cn-col {params.cn_col} --neutral-cn {params.neutral} \
-            {params.hmm} --title "{wildcards.sample}"
         """
 
 
@@ -196,8 +167,8 @@ rule Clones:
     params:
         script=os.path.join(SCRIPTS, "plot_clones.py"),
         prefix=f"{OUT}/{{sample}}/snp_vs_infercnv",
+        type_col=lambda w: sample_type_col(w.sample),
         cn_col=lambda w: sample_cn_col(w.sample),
-        neutral=lambda w: sample_neutral(w.sample),
         min_ovl=MIN_OVL,
         hmm=HMM_FLAG,
     conda:
@@ -211,6 +182,6 @@ rule Clones:
         r"""
         exec > {log} 2>&1
         python {params.script} -r {input.ref} -q {input.pred} -g {input.groupings} \
-            -o {params.prefix} --cn-col {params.cn_col} --neutral-cn {params.neutral} \
+            -o {params.prefix} --type-col {params.type_col} --cn-col {params.cn_col} \
             --min-overlap {params.min_ovl} {params.hmm} --title "{wildcards.sample}"
         """

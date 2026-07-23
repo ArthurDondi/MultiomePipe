@@ -10,8 +10,9 @@ Both files must be on the SAME genome build. The array is hg19, so lift it first
 with liftover_snp_array.py; inferCNV is already hg38.
 
 Direction of an event (only the direction is compared, never absolute copies):
-  reference (SNP array): copy-number column, default col 13 (1-based), values ~1-40
-        cn > 2  -> gain      cn < 2  -> loss      cn == 2 -> neutral (ignored)
+  reference (SNP array): category column, default col 4 (--type-col)
+        gain / wc_gain / amplification -> gain ;  loss / wc_loss -> loss ;
+        anything else -> the segment is ignored  (wc = whole chromosome)
   query     (inferCNV):  HMM `state` column, 1..6 with 3 = diploid baseline
         state > 3 -> gain    state < 3 -> loss    state == 3 -> neutral (never emitted)
 
@@ -52,12 +53,18 @@ def norm_chrom(c):
     return c if c.startswith("chr") else "chr" + c
 
 
-def cn_to_dir(cn, neutral_cn):
-    if cn > neutral_cn:
-        return "gain"
-    if cn < neutral_cn:
+def label_to_dir(label):
+    """Direction from the SNP-array category column (default col 4): any label
+    containing 'gain' or 'amplification' (gain, wc_gain, small_gain, amplification;
+    wc_ = whole chromosome) -> gain; containing 'loss' (loss, wc_loss, small_loss)
+    -> loss; anything else -> None so the segment is ignored. Case-insensitive
+    substring match."""
+    s = label.lower()
+    if "loss" in s:
         return "loss"
-    return "neutral"
+    if "gain" in s or "amplification" in s:
+        return "gain"
+    return None
 
 
 def state_to_dir(state, neutral_state=3):
@@ -89,42 +96,51 @@ def neutral_state_for(query_path, hmm_i=None):
     return {3: 2, 6: 3}[hmm_i], hmm_i
 
 
-def parse_reference(path, cn_col, neutral_cn):
-    """SNP-array BED -> list of events {chrom,start,end,length,cn,dir,label}."""
+def parse_reference(path, type_col=4, cn_col=13):
+    """SNP-array BED -> list of events {chrom,start,end,length,cn,dir,label}.
+
+    Direction comes from the category column `type_col` (default col 4) via
+    label_to_dir: gain/wc_gain/amplification -> gain, loss/wc_loss -> loss; a
+    segment whose category has none of those terms is IGNORED. `cn_col` (default 13)
+    is read best-effort only for the recorded copy number (blank if non-numeric or
+    absent); it no longer drives the direction, so a wrong/empty cn column can't
+    zero out the reference."""
     events = []
-    skipped = 0
-    example = None                         # (raw_line, value_at_cn_col) of first skip
-    idx = cn_col - 1                       # 1-based -> 0-based
+    ignored = 0                            # no gain/loss/amplification category
+    malformed = 0                          # bad coordinates
+    ti = type_col - 1                      # 1-based -> 0-based
+    ci = cn_col - 1
     with open(path) as fh:
         for line in fh:
             raw = line.rstrip("\n")
             if not raw.strip() or raw.startswith(("#", "track", "browser")):
                 continue
             f = raw.split("\t")
-            if len(f) <= idx:
+            if len(f) < 3:
                 continue
             try:
                 start, end = int(f[1]), int(f[2])
-                cn = float(f[idx])
             except ValueError:
-                skipped += 1               # header / malformed -> skip
-                if example is None:
-                    example = (raw, f[idx])
+                malformed += 1             # header / non-integer coordinates
                 continue
-            d = cn_to_dir(cn, neutral_cn)
-            if d == "neutral":
+            label = f[ti] if len(f) > ti else ""
+            d = label_to_dir(label)
+            if d is None:                  # no gain/loss category in col type_col
+                ignored += 1
                 continue
-            label = f[3] if len(f) > 3 else ""     # e.g. loss / amplification
+            cn = None
+            if 0 <= ci < len(f):
+                try:
+                    cn = float(f[ci])
+                except ValueError:
+                    cn = None
             events.append({"chrom": norm_chrom(f[0]), "start": start, "end": end,
                            "length": end - start, "cn": cn, "dir": d, "label": label})
-    if skipped:
-        print(f"[overlap] reference: skipped {skipped} header/malformed line(s)")
-        if example is not None:
-            raw, val = example
-            print(f"[overlap]   e.g. --cn-col {cn_col} = '{val}' is not a number on: "
-                  f"{raw[:100]}{'...' if len(raw) > 100 else ''}")
-            print(f"[overlap]   -> if that is not the copy-number column, set the right "
-                  f"--cn-col / snp_array.cn_col for this file.")
+    if malformed:
+        print(f"[overlap] reference: skipped {malformed} line(s) with non-integer coords")
+    if ignored:
+        print(f"[overlap] reference: ignored {ignored} line(s) with no gain/loss/"
+              f"amplification category in col {type_col}")
     return events
 
 
@@ -370,8 +386,9 @@ def write_tables(rows, summ, prefix, min_overlap):
                  "same_overlap_bp\tsame_overlap_frac\t"
                  "contra_overlap_bp\tcontra_overlap_frac\tmatched\n")
         for r in sorted(rows, key=lambda r: (r["chrom"], r["start"])):
+            cn = "" if r["cn"] is None else r["cn"]
             fh.write(f"{r['chrom']}\t{r['start']}\t{r['end']}\t{r['length']}\t"
-                     f"{r['cn']}\t{r['label']}\t{r['dir']}\t"
+                     f"{cn}\t{r['label']}\t{r['dir']}\t"
                      f"{r['same_bp']}\t{r['same_frac']:.4f}\t"
                      f"{r['contra_bp']}\t{r['contra_frac']:.4f}\t"
                      f"{int(r['matched'])}\n")
@@ -391,9 +408,9 @@ def write_tables(rows, summ, prefix, min_overlap):
 
 
 # --------------------------------------------------------------------------- #
-def run(reference, query_path, cn_col=13, min_overlap=0.5, group=None,
-        neutral_cn=2.0, out_prefix=None, hmm_i=None):
-    events = parse_reference(reference, cn_col, neutral_cn)
+def run(reference, query_path, type_col=4, cn_col=13, min_overlap=0.5, group=None,
+        out_prefix=None, hmm_i=None):
+    events = parse_reference(reference, type_col, cn_col)
     if not events:
         sys.exit("[overlap] no gain/loss events in the reference — nothing to compare.")
     n_gain = sum(e["dir"] == "gain" for e in events)
@@ -418,13 +435,15 @@ def main(argv=None):
                    help="SNP-array CNV BED on hg38 (lift with liftover_snp_array.py first)")
     p.add_argument("-q", "--query", required=True,
                    help="inferCNV pred_cnv_regions.dat")
+    p.add_argument("--type-col", type=int, default=4,
+                   help="1-based category column giving the event direction "
+                        "(gain/wc_gain/amplification vs loss/wc_loss); default 4")
     p.add_argument("--cn-col", type=int, default=13,
-                   help="1-based copy-number column in the reference BED (default 13)")
+                   help="1-based copy-number column, recorded for reference only "
+                        "(default 13); blank if non-numeric — does not affect direction")
     p.add_argument("--min-overlap", type=float, default=0.5,
                    help="min same-direction overlap fraction of a reference event to "
                         "count it as matched (default 0.5)")
-    p.add_argument("--neutral-cn", type=float, default=2.0,
-                   help="copy number treated as diploid/neutral (default 2.0)")
     p.add_argument("--group", default=None,
                    help="restrict inferCNV to one cell_group_name (default: union of all)")
     p.add_argument("--hmm-i", type=int, choices=(3, 6), default=None,
@@ -434,8 +453,8 @@ def main(argv=None):
     p.add_argument("--out-prefix", default=None,
                    help="write <prefix>.per_event.tsv and <prefix>.summary.tsv")
     args = p.parse_args(argv)
-    run(args.reference, args.query, args.cn_col, args.min_overlap, args.group,
-        args.neutral_cn, args.out_prefix, args.hmm_i)
+    run(args.reference, args.query, args.type_col, args.cn_col, args.min_overlap,
+        args.group, args.out_prefix, args.hmm_i)
 
 
 if __name__ == "__main__":
