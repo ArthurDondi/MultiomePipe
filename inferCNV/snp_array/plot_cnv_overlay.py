@@ -176,14 +176,28 @@ def genome_chroms(include_xy=False):
     return [f"chr{i}" for i in range(1, 23)] + (["chrX", "chrY"] if include_xy else [])
 
 
+def import_pyplot():
+    """Import matplotlib (Agg backend), with an actionable message if it's absent."""
+    try:
+        import matplotlib
+    except ImportError:
+        sys.exit(
+            "[plot] matplotlib is not installed in this Python. Fix with one of:\n"
+            "         pip install matplotlib\n"
+            "         conda install -c conda-forge matplotlib-base\n"
+            "       or run in an env that already has it (the pipeline env\n"
+            "       inferCNV/snp_array/envs/snp_array.yaml, or your scverse env).")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    return plt
+
+
 def render_overlay(out, events, query_by_dir, title="", chroms=None,
                    width=18.0, height=4.2, dpi=150):
     """Draw + save the 3-band overlay for one (reference, query) pair. `query_by_dir`
     is a {dir:{chrom:[merged]}} (e.g. a single clone). Returns the decompose dict
     (with 'skipped'). Shared by the CLI and plot_clones.py."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = import_pyplot()
 
     if chroms is None:
         chroms = genome_chroms(False)

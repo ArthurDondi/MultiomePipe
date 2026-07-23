@@ -38,7 +38,7 @@ from compare_cnv_overlap import (  # noqa: E402
 from plot_cnv_overlay import (  # noqa: E402
     ROW_H, C_GAIN, C_LOSS, build_offsets, genome_chroms, events_dir_items,
     draw_dir_band, draw_match_band, decorate_genome_axis, legend_handles,
-    render_overlay)
+    render_overlay, import_pyplot)
 
 C_SIZE = "#9e9ac8"     # clone-size sidebar bars
 
@@ -95,9 +95,7 @@ def write_table(recs, path):
 
 def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
     """Stacked match band per clone (sorted) + a clone-size sidebar."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = import_pyplot()
 
     offsets, genome_len = build_offsets(chroms)
     has_sizes = any(r["n_cells"] is not None for r in recs)
