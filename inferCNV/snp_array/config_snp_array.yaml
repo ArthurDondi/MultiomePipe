@@ -9,7 +9,7 @@ snp_array:
 
   # ---- inferCNV outputs (input) -------------------------------------------
   # Root that holds one sub-folder per sample (matches OUTPUT_DIR in run_infercnv.R).
-  infercnv_results_dir: /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/results
+  infercnv_results_dir: /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/QC/RNA/Merged/inferCNV/results
 
   # Glob (inside results/<sample>/) for the HMM regions + the groupings file. This
   # matches both the pre-filter (17_HMM_pred...) and the Bayes-filtered
@@ -38,9 +38,9 @@ snp_array:
   # SAME array BED (e.g. IMR DOX/noDOX). Delete any line you have no array for.
   # (BMOalone is the bone-marrow organoid with no cancer cell line -> no array.)
   samples:
-    BMO-SKNBE2c:   /nobackup/lab_taschner-mandl/arthurdondi/data/snp_array/SKNBE2c.hg19.bed
-    BMO-SKNSH:     /nobackup/lab_taschner-mandl/arthurdondi/data/snp_array/SKNSH.hg19.bed
-    BMO-STANB12:   /nobackup/lab_taschner-mandl/arthurdondi/data/snp_array/STANB12.hg19.bed
-    BMO-STANB8:    /nobackup/lab_taschner-mandl/arthurdondi/data/snp_array/STANB8.hg19.bed
-    BMO-IMR-DOX:   /nobackup/lab_taschner-mandl/arthurdondi/data/snp_array/IMR.hg19.bed
-    BMO-IMR-noDOX: /nobackup/lab_taschner-mandl/arthurdondi/data/snp_array/IMR.hg19.bed
+    BMO-SKNBE2c:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNBE2c.hg19.bed
+    #BMO-SKNSH:     /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNSH.hg19.bed
+    BMO-STANB12:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB12.hg19.bed
+    BMO-STANB8:    /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB8.hg19.bed
+    #BMO-IMR-DOX:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed
+    #BMO-IMR-noDOX: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed

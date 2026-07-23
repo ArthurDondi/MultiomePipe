@@ -30,11 +30,11 @@
 
 set -euo pipefail
 
-CONFIG="${1:-inferCNV/snp_array/config_snp_array.yaml}"
+CONFIG="${1:-config_snp_array.yaml}"
 
 # --- activate the conda env that has snakemake + the slurm executor plugin ----
 CONDA_BASE="${CONDA_BASE:-/nobackup/lab_taschner-mandl/arthurdondi/miniconda3}"
-CONDA_ENV="${CONDA_ENV:-snakemake}"
+CONDA_ENV="${CONDA_ENV:-MultiomePipe}"
 # conda's shell hook is not always `set -u` clean, so relax nounset around it.
 set +u
 source "$CONDA_BASE/etc/profile.d/conda.sh"
@@ -51,7 +51,7 @@ echo "======================"
 # --workflow-profile profiles/slurm supplies the executor, per-rule queues and
 # use-conda; --jobs caps how many rule-jobs run at once.
 snakemake \
-    -s inferCNV/snp_array/Snakefile \
+    -s Snakefile \
     --configfile "$CONFIG" \
     --workflow-profile profiles/slurm \
     --jobs 20 \
