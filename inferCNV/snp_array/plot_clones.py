@@ -5,8 +5,9 @@ Per-clone SNP-array vs inferCNV comparison for one sample run in analysis_mode
 
 Produces, taking the SNP array as reference:
   1. one 3-band overlay per clone  (reference / that clone / match)   [--no-overlays to skip]
-  2. a SUMMARY plot stacking every clone's match band on shared genome axes, with a
-     clone-size sidebar (cells per clone, from observation_groupings.txt)
+  2. a SUMMARY plot: per clone, its inferCNV copy-number profile (gain/loss) stacked
+     above its match band, on shared genome axes, with a clone-size sidebar (cells
+     per clone, from observation_groupings.txt) and a reference row on top
   3. a per-clone table  <prefix>.clones.tsv
 
 Clone sizes come from inferCNV's observation_groupings.txt: the "Dendrogram Group"
@@ -37,8 +38,8 @@ from compare_cnv_overlap import (  # noqa: E402
     compare, summarize, neutral_state_for)
 from plot_cnv_overlay import (  # noqa: E402
     ROW_H, C_GAIN, C_LOSS, build_offsets, genome_chroms, events_dir_items,
-    draw_dir_band, draw_match_band, decorate_genome_axis, legend_handles,
-    render_overlay, import_pyplot)
+    query_dir_items, draw_dir_band, draw_match_band, decorate_genome_axis,
+    legend_handles, render_overlay, import_pyplot)
 
 C_SIZE = "#9e9ac8"     # clone-size sidebar bars
 
@@ -94,20 +95,34 @@ def write_table(recs, path):
 
 
 def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
-    """Stacked match band per clone (sorted) + a clone-size sidebar."""
+    """Reference row on top, then per clone TWO stacked bands — the clone's inferCNV
+    copy-number profile (gain/loss) and, below it, its match band — plus a
+    clone-size sidebar. Clones are already sorted largest-first."""
     plt = import_pyplot()
 
     offsets, genome_len = build_offsets(chroms)
     has_sizes = any(r["n_cells"] is not None for r in recs)
     total_cells = sum(r["n_cells"] for r in recs if r["n_cells"] is not None)
 
-    # rows top -> bottom: reference context row, then clones (already sorted)
-    order = ["__ref__"] + [r["clone"] for r in recs]
-    n = len(order)
-    y_of = {name: (n - 1 - i) for i, name in enumerate(order)}   # top row highest y
-    rec_by_clone = {r["clone"]: r for r in recs}
+    H, G_IN, G_OUT = 0.60, 0.08, 0.42        # band height; intra-clone / inter-row gap
 
-    fig_h = max(3.0, 0.34 * n + 1.4)
+    # rows top -> bottom: reference, then per clone [query CN profile, match]
+    rows = [{"kind": "ref", "clone": None}]
+    for r in recs:
+        rows.append({"kind": "query", "clone": r["clone"]})
+        rows.append({"kind": "match", "clone": r["clone"]})
+
+    # bottom-y for each band, walking downward from 0 (small gap keeps a clone's
+    # two bands together; larger gap separates clones)
+    cur = 0.0
+    for i, row in enumerate(rows):
+        if i > 0:
+            together = row["kind"] == "match" and rows[i - 1]["kind"] == "query"
+            cur -= G_IN if together else G_OUT
+        cur -= H
+        row["y"] = cur
+
+    fig_h = max(3.0, 0.42 * len(rows) + 1.3)
     if has_sizes:
         fig, (ax, ax2) = plt.subplots(
             1, 2, figsize=(width + 2.2, fig_h), sharey=True,
@@ -117,41 +132,60 @@ def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
         fig, ax = plt.subplots(figsize=(width, fig_h), constrained_layout=True)
         ax2 = None
 
-    # reference context row
-    draw_dir_band(ax, events_dir_items(events, "gain"),
-                  events_dir_items(events, "loss"), offsets, y_of["__ref__"])
-    # one match band per clone
-    for clone in order[1:]:
-        draw_match_band(ax, events, by_group[clone], offsets, y_of[clone])
+    rec_by_clone = {r["clone"]: r for r in recs}
+    for row in rows:
+        y, clone = row["y"], row["clone"]
+        if row["kind"] == "ref":
+            draw_dir_band(ax, events_dir_items(events, "gain"),
+                          events_dir_items(events, "loss"), offsets, y, H)
+        elif row["kind"] == "query":                 # clone's own inferCNV calls
+            qbd = by_group[clone]
+            draw_dir_band(ax, query_dir_items(qbd, "gain"),
+                          query_dir_items(qbd, "loss"), offsets, y, H)
+        else:                                         # match vs reference
+            draw_match_band(ax, events, by_group[clone], offsets, y, H)
 
     decorate_genome_axis(ax, chroms, offsets, genome_len)
     yt, yl = [], []
-    for name in order:
-        yt.append(y_of[name] + ROW_H / 2)
-        if name == "__ref__":
+    for row in rows:
+        yt.append(row["y"] + H / 2)
+        if row["kind"] == "ref":
             yl.append("reference (SNP array)")
+        elif row["kind"] == "query":
+            yl.append(f"{short(row['clone'])}  (inferCNV)")
         else:
-            r = rec_by_clone[name]
-            pm = r["pct_bp_matched"]
-            yl.append(f"{short(name)}  {0 if pm != pm else round(pm)}%")
+            pm = rec_by_clone[row["clone"]]["pct_bp_matched"]
+            yl.append(f"match {0 if pm != pm else round(pm)}%")
     ax.set_yticks(yt)
     ax.set_yticklabels(yl, fontsize=7)
-    ax.set_ylim(-0.4, n - 1 + ROW_H + 0.4)
+    ax.set_ylim(cur - 0.25, 0.25)
     ax.tick_params(axis="y", length=0)
     for spine in ("top", "right", "left"):
         ax.spines[spine].set_visible(False)
     ax.set_xlabel("chromosome", fontsize=9)
 
     t = (title + "  ") if title else ""
-    ax.set_title(f"{t}per-clone match to SNP array  "
-                 f"(row label = % of reference bp matched)", fontsize=11)
+    ax.set_title(f"{t}per-clone inferCNV profile + match to SNP array", fontsize=11)
     ax.legend(handles=legend_handles(), ncol=5, fontsize=8, loc="lower center",
-              bbox_to_anchor=(0.5, -0.9 / fig_h - 0.02), frameon=False)
+              bbox_to_anchor=(0.5, -1.1 / fig_h - 0.02), frameon=False)
 
     if ax2 is not None:
-        centers = [y_of[r["clone"]] + ROW_H / 2 for r in recs if r["n_cells"] is not None]
-        vals = [r["n_cells"] for r in recs if r["n_cells"] is not None]
-        ax2.barh(centers, vals, height=ROW_H, color=C_SIZE)
+        qy = {r["clone"]: None for r in recs}
+        my = {r["clone"]: None for r in recs}
+        for row in rows:
+            if row["kind"] == "query":
+                qy[row["clone"]] = row["y"]
+            elif row["kind"] == "match":
+                my[row["clone"]] = row["y"]
+        centers, heights, vals = [], [], []
+        for r in recs:                                # one bar per clone, spanning its pair
+            if r["n_cells"] is None:
+                continue
+            top, bot = qy[r["clone"]] + H, my[r["clone"]]
+            centers.append((top + bot) / 2)
+            heights.append((top - bot) * 0.6)
+            vals.append(r["n_cells"])
+        ax2.barh(centers, vals, height=heights, color=C_SIZE)
         vmax = max(vals) if vals else 1
         for c, v in zip(centers, vals):
             ax2.text(v + vmax * 0.02, c, str(v), va="center", fontsize=6)
