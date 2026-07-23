@@ -19,11 +19,10 @@
 # SLURM job through profiles/slurm/config.yaml. It therefore needs few resources
 # itself. Each rule uses the inferCNV/snp_array/envs/snp_array.yaml conda env.
 #
-# Submit from anywhere — the script cd's to its own inferCNV/snp_array/ dir so the
-# relative -s Snakefile / --configfile config_snp_array.yaml resolve, and points the
-# profile at the repo-root profiles/slurm:
+# Submit from inside the repo (typically the MultiomePipe/ root, like
+# run_Multiomepipe_slurm.sh); the script locates the repo root itself:
 #   sbatch inferCNV/snp_array/run_snp_array_slurm.sh
-#   # or with a different config (relative to inferCNV/snp_array/, or absolute):
+#   # or with a different config (absolute, repo-root-relative, or a bare filename):
 #   sbatch inferCNV/snp_array/run_snp_array_slurm.sh /abs/path/my_snp_array.yaml
 #
 # Needs a conda env with snakemake + the SLURM executor plugin (CONDA_ENV, default
@@ -33,12 +32,30 @@
 
 set -euo pipefail
 
-# Resolve paths from the script's own location so it works from any submit dir.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-cd "$SCRIPT_DIR"          # so `-s Snakefile` and `--configfile config_snp_array.yaml` resolve
+# Find the repo root (the dir containing profiles/slurm) by walking up from the
+# submit dir. NB: do NOT use $BASH_SOURCE here — under sbatch, SLURM copies this
+# script to a spool dir, so the script's own path is not inside the repo.
+start_dir="${SLURM_SUBMIT_DIR:-$PWD}"
+REPO_ROOT="$start_dir"
+while [ "$REPO_ROOT" != "/" ] && [ ! -d "$REPO_ROOT/profiles/slurm" ]; do
+    REPO_ROOT="$(dirname "$REPO_ROOT")"
+done
+if [ ! -d "$REPO_ROOT/profiles/slurm" ]; then
+    echo "ERROR: could not find the MultiomePipe root (a dir with profiles/slurm)"
+    echo "       by walking up from '$start_dir'. Submit from inside the repo, e.g.:"
+    echo "         cd /path/to/MultiomePipe && sbatch inferCNV/snp_array/run_snp_array_slurm.sh"
+    exit 1
+fi
+cd "$REPO_ROOT"
 
-CONFIG="${1:-config_snp_array.yaml}"
+# Config: default, or $1 given as an absolute path / repo-root-relative / bare name.
+CONFIG="${1:-inferCNV/snp_array/config_snp_array.yaml}"
+if [ ! -f "$CONFIG" ] && [ -f "inferCNV/snp_array/$CONFIG" ]; then
+    CONFIG="inferCNV/snp_array/$CONFIG"
+fi
+if [ ! -f "$CONFIG" ]; then
+    echo "ERROR: config file not found: '$CONFIG' (from repo root $REPO_ROOT)"; exit 1
+fi
 
 # --- activate the conda env that has snakemake + the slurm executor plugin ----
 CONDA_BASE="${CONDA_BASE:-/nobackup/lab_taschner-mandl/arthurdondi/miniconda3}"
@@ -51,17 +68,19 @@ set -u
 
 echo "======================"
 echo "submit dir : ${SLURM_SUBMIT_DIR:-$(pwd)}"
+echo "repo root  : $REPO_ROOT"
 echo "job id     : ${SLURM_JOB_ID:-<interactive>}"
 echo "config     : $CONFIG"
 echo "snakemake  : $(command -v snakemake)"
 echo "======================"
 
-# --workflow-profile profiles/slurm supplies the executor, per-rule queues and
-# use-conda; --jobs caps how many rule-jobs run at once.
+# Everything below is repo-root-relative (we cd'd there). --workflow-profile
+# profiles/slurm supplies the executor, per-rule queues and use-conda; --jobs caps
+# how many rule-jobs run at once.
 snakemake \
-    -s Snakefile \
+    -s inferCNV/snp_array/Snakefile \
     --configfile "$CONFIG" \
-    --workflow-profile "$REPO_ROOT/profiles/slurm" \
+    --workflow-profile profiles/slurm \
     --jobs 20 \
     --rerun-triggers mtime params software-env \
     -p
