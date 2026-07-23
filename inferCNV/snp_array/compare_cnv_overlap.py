@@ -93,6 +93,7 @@ def parse_reference(path, cn_col, neutral_cn):
     """SNP-array BED -> list of events {chrom,start,end,length,cn,dir,label}."""
     events = []
     skipped = 0
+    example = None                         # (raw_line, value_at_cn_col) of first skip
     idx = cn_col - 1                       # 1-based -> 0-based
     with open(path) as fh:
         for line in fh:
@@ -107,6 +108,8 @@ def parse_reference(path, cn_col, neutral_cn):
                 cn = float(f[idx])
             except ValueError:
                 skipped += 1               # header / malformed -> skip
+                if example is None:
+                    example = (raw, f[idx])
                 continue
             d = cn_to_dir(cn, neutral_cn)
             if d == "neutral":
@@ -116,6 +119,12 @@ def parse_reference(path, cn_col, neutral_cn):
                            "length": end - start, "cn": cn, "dir": d, "label": label})
     if skipped:
         print(f"[overlap] reference: skipped {skipped} header/malformed line(s)")
+        if example is not None:
+            raw, val = example
+            print(f"[overlap]   e.g. --cn-col {cn_col} = '{val}' is not a number on: "
+                  f"{raw[:100]}{'...' if len(raw) > 100 else ''}")
+            print(f"[overlap]   -> if that is not the copy-number column, set the right "
+                  f"--cn-col / snp_array.cn_col for this file.")
     return events
 
 

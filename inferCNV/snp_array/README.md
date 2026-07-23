@@ -87,13 +87,21 @@ Only the **direction** of each event is compared (never absolute copy number):
 
 | source | column | rule |
 |--------|--------|------|
-| SNP array (reference) | copy number, default **col 13** (`--cn-col`) | `>2` gain, `<2` loss, `==2` neutral (ignored) |
+| SNP array (reference) | copy number, default **col 13** (`--cn-col`) | `> neutral` gain, `< neutral` loss, `== neutral` (ignored) |
 | inferCNV (query) | HMM `state` | `> neutral` gain, `< neutral` loss, `== neutral` (never emitted) |
 
-The neutral state depends on the HMM model: **i6** (states 1-6) is diploid at
-**3**, **i3** (states 1-3) is diploid at **2**. The model is autodetected from the
-query filename (`...predHMMi3...` vs `...HMMi6...`); override with `--hmm-i {3,6}`.
-Getting this wrong flips gains/losses, so check the printed
+**Reference baseline (`--neutral-cn`, default 2).** CN is compared to the cell
+line's diploid baseline: below it = loss, above = gain. A **non-diploid** line
+needs this set — e.g. a near-tetraploid sample has ploidy 4, so CN 1/2/3 are all
+losses; run it with `--neutral-cn 4` (or `neutral_cn: 4` in the config). If the
+copy number is in a different column, set `--cn-col`; when `--cn-col` points at a
+non-numeric column every row is dropped as "malformed" and the log prints the
+offending value so you can fix it.
+
+**inferCNV neutral state** depends on the HMM model: **i6** (states 1-6) is diploid
+at **3**, **i3** (states 1-3) is diploid at **2**. The model is autodetected from
+the query filename (`...predHMMi3...` vs `...HMMi6...`); override with
+`--hmm-i {3,6}`. Getting this wrong flips gains/losses, so check the printed
 `inferCNV model: HMMiN` line.
 
 A reference event **matches** when same-direction inferCNV calls cover at least
@@ -181,7 +189,10 @@ reuses the repo's SLURM profile (`profiles/slurm`). Per sample it produces
 1. Edit `config_snp_array.yaml`: set `infercnv_results_dir`, `output_dir`, the
    `chain` path, and one `samples:` entry per sample pointing at its **hg19** array
    BED (samples that share a cell line — e.g. IMR DOX/noDOX — point at the same
-   file; drop any sample you have no array for).
+   file; drop any sample you have no array for). A sample value may instead be a
+   mapping `{bed:, cn_col:, neutral_cn:}` to override the copy-number column or the
+   diploid baseline for that one sample (e.g. `neutral_cn: 4` for a near-tetraploid
+   line) — see the global `cn_col` / `neutral_cn` and the comment above `samples:`.
 2. Submit the controller from the `MultiomePipe/` root:
 
 ```bash

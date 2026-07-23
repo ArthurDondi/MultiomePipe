@@ -30,13 +30,20 @@ snp_array:
 
   # ---- comparison parameters ----------------------------------------------
   hmm_i: 3                 # inferCNV HMM model: 3 (subclusters i3) or 6; null = autodetect from filename
-  cn_col: 13               # 1-based copy-number column in the SNP-array BED
+  cn_col: 13               # 1-based copy-number column in the SNP-array BED (global default)
+  neutral_cn: 2            # diploid baseline: CN < this = loss, > this = gain (global default)
   min_overlap: 0.5         # min same-direction overlap of a reference event to count it matched
 
-  # ---- samples -> hg19 SNP-array CNV BED -----------------------------------
-  # One entry per sample to process. Samples that share a cell line point at the
-  # SAME array BED (e.g. IMR DOX/noDOX). Delete any line you have no array for.
-  # (BMOalone is the bone-marrow organoid with no cancer cell line -> no array.)
+  # ---- samples -> SNP-array CNV BED ----------------------------------------
+  # One entry per sample. A value is either a plain hg19 BED path, OR a mapping that
+  # overrides cn_col / neutral_cn for that one sample -- useful when a file has its
+  # copy number in a different column, or the cell line is not diploid:
+  #     BMO-STANB8:
+  #       bed: /path/STANB8.hg19.bed
+  #       cn_col: 13         # set if this file's CN is NOT in the global cn_col
+  #       neutral_cn: 4      # near-tetraploid: CN 1/2/3 are all losses vs ploidy 4
+  # Samples sharing a cell line point at the SAME BED (e.g. IMR DOX/noDOX). Delete
+  # any line you have no array for. (BMOalone = organoid, no cancer line -> no array.)
   samples:
     BMO-SKNBE2c:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNBE2c.hg19.bed
     #BMO-SKNSH:     /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/SKNSH.hg19.bed
