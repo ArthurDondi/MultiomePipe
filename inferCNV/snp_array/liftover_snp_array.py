@@ -15,9 +15,13 @@ On first use pyliftover downloads UCSC's hg19ToHg38.over.chain.gz. On an offline
 cluster, fetch the chain once and pass it with --chain:
   http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToHg38.over.chain.gz
 
-Each segment's start and end are lifted independently. A segment is *dropped*
-(written to <output>.unmapped instead) when
-  - either endpoint fails to map,
+Each segment's start and end are lifted independently. If an endpoint lands in a
+chain gap (common in sub-telomeric / peri-centromeric sequence) it is walked
+INWARD up to --max-nudge bp until a base maps, so a whole-arm CNV is not dropped
+just because its boundary base has no hg38 counterpart (a few kb off a Mb-scale
+segment is negligible; the trim is reported). A segment is only *dropped* (written
+to <output>.unmapped instead) when
+  - an endpoint still fails to map after nudging up to --max-nudge bp,
   - the two endpoints land on different hg38 chromosomes (segment straddles a
     build rearrangement), or
   - the lifted length differs from the original by more than --max-len-change.
@@ -87,27 +91,51 @@ def lift_point(lo, chrom, pos):
     return tgt_chrom, tgt_pos
 
 
-def lift_interval(lo, chrom, start, end):
-    """Lift a BED interval [start, end). Returns (chrom, new_start, new_end) or
-    (None, reason) on failure. end is exclusive, so the last included base is
-    end-1; we lift that and add 1 back."""
-    a = lift_point(lo, chrom, start)
-    b = lift_point(lo, chrom, end - 1)
+def lift_point_rescue(lo, chrom, pos, inward, max_nudge, step=1000):
+    """Lift `pos`; if it falls in a chain gap, walk INWARD until a base maps.
+    `inward` is +1 for a start (move right, into the segment) or -1 for an end
+    (move left). Steps by `step` bp up to `max_nudge`. Returns
+    (chrom, mapped_pos, shift_bp) — shift_bp is how far we had to move (0 if the
+    original base mapped) — or None if nothing maps within max_nudge."""
+    r = lift_point(lo, chrom, pos)
+    if r is not None:
+        return r[0], r[1], 0
+    moved = step
+    while moved <= max_nudge:
+        r = lift_point(lo, chrom, pos + inward * moved)
+        if r is not None:
+            return r[0], r[1], moved
+        moved += step
+    return None
+
+
+def lift_interval(lo, chrom, start, end, max_nudge=0, step=1000):
+    """Lift a BED interval [start, end). end is exclusive, so the last included
+    base is end-1; we lift that and add 1 back. When max_nudge > 0, an unmappable
+    endpoint is walked inward (start right, end left) up to min(max_nudge, ~half
+    the segment) bp so the segment is not dropped for a single unmappable boundary
+    base. Returns (chrom, new_start, new_end, trim_bp) on success — trim_bp is the
+    hg19 bp shaved off the ends by rescue (0 if none) — or (None, reason)."""
+    # cap the nudge so start and end can never cross past each other
+    cap = min(max_nudge, max(0, (end - start) // 2 - 1)) if max_nudge else 0
+    a = lift_point_rescue(lo, chrom, start, +1, cap, step)      # start moves right
+    b = lift_point_rescue(lo, chrom, end - 1, -1, cap, step)    # end moves left
     if a is None or b is None:
         return None, "unmapped_endpoint"
     if a[0] != b[0]:
         return None, "endpoints_on_different_chromosomes"
     lo_pos, hi_pos = sorted((a[1], b[1]))   # handles +/- strand mapping
-    return a[0], lo_pos, hi_pos + 1
+    return a[0], lo_pos, hi_pos + 1, a[2] + b[2]
 
 
 def run(input_bed, output_bed, chain=None, from_build="hg19", to_build="hg38",
-        max_len_change=0.25):
+        max_len_change=0.25, max_nudge=200000):
     lo = load_liftover(chain, from_build, to_build)
 
     unmapped_path = output_bed + ".unmapped"
     n_in = n_out = n_skip_hdr = 0
     reasons = {}
+    rescued = []                       # (chrom, start, end, trim_bp)
 
     with open(input_bed) as fin, \
          open(output_bed, "w") as fout, \
@@ -128,18 +156,20 @@ def run(input_bed, output_bed, chain=None, from_build="hg19", to_build="hg38",
             chrom = norm_chrom(f[0])
             old_len = end - start
 
-            res = lift_interval(lo, chrom, start, end)
+            res = lift_interval(lo, chrom, start, end, max_nudge)
             if res[0] is None:
                 reasons[res[1]] = reasons.get(res[1], 0) + 1
                 funmap.write(raw + "\t" + res[1] + "\n")
                 continue
 
-            new_chrom, new_start, new_end = res
+            new_chrom, new_start, new_end, trim = res
             new_len = new_end - new_start
             if old_len > 0 and abs(new_len - old_len) / old_len > max_len_change:
                 reasons["length_change"] = reasons.get("length_change", 0) + 1
                 funmap.write(raw + f"\tlength_change({old_len}->{new_len})\n")
                 continue
+            if trim > 0:
+                rescued.append((chrom, start, end, trim))
 
             # rewrite coordinate columns; also fix the duplicate start/end (cols
             # 7/8) and length (col 11) *only* when they mirror the hg19 values.
@@ -154,6 +184,11 @@ def run(input_bed, output_bed, chain=None, from_build="hg19", to_build="hg38",
     print(f"[liftover] input events        : {n_in}"
           + (f"  (+{n_skip_hdr} header/comment line(s) skipped)" if n_skip_hdr else ""))
     print(f"[liftover] lifted to {to_build}      : {n_out}")
+    if rescued:
+        print(f"[liftover] rescued (nudged)    : {len(rescued)}  "
+              f"(unmappable boundary, walked inward <= {max_nudge:,} bp)")
+        for c, s, e, tr in rescued:
+            print(f"[liftover]     - {c}:{s:,}-{e:,} trimmed {tr:,} bp")
     n_unmapped = n_in - n_out
     print(f"[liftover] dropped (unmapped)  : {n_unmapped}")
     for r, c in sorted(reasons.items()):
@@ -178,9 +213,13 @@ def main(argv=None):
     p.add_argument("--max-len-change", type=float, default=0.25,
                    help="drop a segment if |lifted-len - orig-len|/orig-len exceeds "
                         "this (default 0.25 = 25%%; guards against build rearrangements)")
+    p.add_argument("--max-nudge", type=int, default=200000,
+                   help="if an endpoint is unmappable, walk it inward up to this many "
+                        "bp to rescue the segment (default 200000; 0 disables). A few "
+                        "kb off a Mb-scale CNV is negligible; the trim is reported.")
     args = p.parse_args(argv)
     run(args.input, args.output, args.chain, args.from_build, args.to_build,
-        args.max_len_change)
+        args.max_len_change, args.max_nudge)
 
 
 if __name__ == "__main__":

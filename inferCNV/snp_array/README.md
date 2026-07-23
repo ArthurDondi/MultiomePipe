@@ -57,6 +57,15 @@ originals). Segments whose endpoints don't map, land on two different hg38
 chromosomes, or change length by more than `--max-len-change` (default 25%) are
 dropped to `<output>.unmapped` with a reason column.
 
+**Endpoint rescue.** A boundary base in a chain gap (sub-telomeric /
+peri-centromeric sequence has none) would otherwise sink a whole-arm CNV — e.g. a
+91 Mb chr12 gain starting at chr12:149,960 fails because that sub-telomeric base
+has no hg38 counterpart. So an unmappable endpoint is walked **inward** in 1 kb
+steps up to `--max-nudge` bp (default 200 kb; `0` disables) until a base maps; a
+few kb trimmed off a Mb-scale segment is negligible and every rescued segment is
+reported with its trim. The nudge is capped at half the segment so a tiny segment
+with a deep-gap boundary still drops rather than collapsing.
+
 ## 2. Overlap against inferCNV
 
 ```bash
