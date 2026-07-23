@@ -19,16 +19,24 @@
 # SLURM job through profiles/slurm/config.yaml. It therefore needs few resources
 # itself. Each rule uses the inferCNV/snp_array/envs/snp_array.yaml conda env.
 #
-# Submit from the MultiomePipe/ root:
+# Submit from anywhere — the script cd's to its own inferCNV/snp_array/ dir so the
+# relative -s Snakefile / --configfile config_snp_array.yaml resolve, and points the
+# profile at the repo-root profiles/slurm:
 #   sbatch inferCNV/snp_array/run_snp_array_slurm.sh
-#   # or with a different config:
-#   sbatch inferCNV/snp_array/run_snp_array_slurm.sh config/my_snp_array.yaml
+#   # or with a different config (relative to inferCNV/snp_array/, or absolute):
+#   sbatch inferCNV/snp_array/run_snp_array_slurm.sh /abs/path/my_snp_array.yaml
 #
-# Needs a conda env with snakemake + the SLURM executor plugin, e.g.:
-#   conda create -n snakemake -c conda-forge -c bioconda snakemake snakemake-executor-plugin-slurm
-# Point CONDA_BASE / CONDA_ENV at it if it lives elsewhere / is named differently.
+# Needs a conda env with snakemake + the SLURM executor plugin (CONDA_ENV, default
+# MultiomePipe). The plot/liftover tools (matplotlib, pyliftover) come from the
+# per-rule env envs/snp_array.yaml, which snakemake builds because the profile sets
+# use-conda: true — so matplotlib does NOT need to be in CONDA_ENV.
 
 set -euo pipefail
+
+# Resolve paths from the script's own location so it works from any submit dir.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$SCRIPT_DIR"          # so `-s Snakefile` and `--configfile config_snp_array.yaml` resolve
 
 CONFIG="${1:-config_snp_array.yaml}"
 
@@ -53,7 +61,7 @@ echo "======================"
 snakemake \
     -s Snakefile \
     --configfile "$CONFIG" \
-    --workflow-profile profiles/slurm \
+    --workflow-profile "$REPO_ROOT/profiles/slurm" \
     --jobs 20 \
     --rerun-triggers mtime params software-env \
     -p
