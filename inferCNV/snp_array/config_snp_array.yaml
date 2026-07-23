@@ -19,7 +19,7 @@ snp_array:
   groupings_glob: "*observation_groupings.txt"
 
   # ---- comparison outputs -------------------------------------------------
-  output_dir: /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/inferCNV/snp_array_comparison
+  output_dir: /nobackup/lab_taschner-mandl/arthurdondi/projects/BMO/QC/RNA/Merged/inferCNV/snp_array_comparison
 
   # ---- liftover -----------------------------------------------------------
   # Local UCSC hg19->hg38 chain for offline clusters. Leave empty ("") to let
