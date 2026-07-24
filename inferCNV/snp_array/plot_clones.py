@@ -35,7 +35,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compare_cnv_overlap import (  # noqa: E402
     parse_reference, parse_query_by_group, parse_groupings, clone_size,
-    compare, summarize, neutral_state_for)
+    compare, summarize, neutral_state_for, events_from_infercnv)
 from plot_cnv_overlay import (  # noqa: E402
     ROW_H, C_GAIN, C_LOSS, build_offsets, genome_chroms, events_dir_items,
     query_dir_items, draw_dir_band, draw_match_band, decorate_genome_axis,
@@ -94,10 +94,12 @@ def write_table(recs, path):
     print(f"[clones] wrote {path}")
 
 
-def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
-    """Reference row on top, then per clone TWO stacked bands — the clone's inferCNV
-    copy-number profile (gain/loss) and, below it, its match band — plus a
-    clone-size sidebar. Clones are already sorted largest-first."""
+def summary_plot(events, by_group, recs, out, chroms, title, width, dpi,
+                 ref_label="SNP array", show_match=True):
+    """Reference row on top, then per clone its inferCNV copy-number profile
+    (gain/loss) and — when show_match — its match band below it; plus a clone-size
+    sidebar. Clones are already sorted largest-first. `ref_label` names the reference
+    (e.g. 'SNP array' or another sample's inferCNV)."""
     plt = import_pyplot()
 
     offsets, genome_len = build_offsets(chroms)
@@ -106,11 +108,12 @@ def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
 
     H, G_IN, G_OUT = 0.60, 0.08, 0.42        # band height; intra-clone / inter-row gap
 
-    # rows top -> bottom: reference, then per clone [query CN profile, match]
+    # rows top -> bottom: reference, then per clone [query CN profile (, match)]
     rows = [{"kind": "ref", "clone": None}]
     for r in recs:
         rows.append({"kind": "query", "clone": r["clone"]})
-        rows.append({"kind": "match", "clone": r["clone"]})
+        if show_match:
+            rows.append({"kind": "match", "clone": r["clone"]})
 
     # bottom-y for each band, walking downward from 0 (small gap keeps a clone's
     # two bands together; larger gap separates clones)
@@ -150,7 +153,7 @@ def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
     for row in rows:
         yt.append(row["y"] + H / 2)
         if row["kind"] == "ref":
-            yl.append("reference (SNP array)")
+            yl.append(f"reference ({ref_label})")
         elif row["kind"] == "query":
             yl.append(f"{short(row['clone'])}  (inferCNV)")
         else:
@@ -165,8 +168,12 @@ def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
     ax.set_xlabel("chromosome", fontsize=9)
 
     t = (title + "  ") if title else ""
-    ax.set_title(f"{t}per-clone inferCNV profile + match to SNP array", fontsize=11)
-    ax.legend(handles=legend_handles(), ncol=5, fontsize=8, loc="lower center",
+    if show_match:
+        ax.set_title(f"{t}per-clone inferCNV profile + match to {ref_label}", fontsize=11)
+    else:
+        ax.set_title(f"{t}per-clone inferCNV profiles vs {ref_label} reference", fontsize=11)
+    handles = legend_handles() if show_match else legend_handles()[:2]  # gain/loss only
+    ax.legend(handles=handles, ncol=5 if show_match else 2, fontsize=8, loc="lower center",
               bbox_to_anchor=(0.5, -1.1 / fig_h - 0.02), frameon=False)
 
     if ax2 is not None:
@@ -178,12 +185,13 @@ def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
             elif row["kind"] == "match":
                 my[row["clone"]] = row["y"]
         centers, heights, vals = [], [], []
-        for r in recs:                                # one bar per clone, spanning its pair
+        for r in recs:                                # one bar per clone, spanning its band(s)
             if r["n_cells"] is None:
                 continue
-            top, bot = qy[r["clone"]] + H, my[r["clone"]]
+            top = qy[r["clone"]] + H
+            bot = my[r["clone"]] if my[r["clone"]] is not None else qy[r["clone"]]
             centers.append((top + bot) / 2)
-            heights.append((top - bot) * 0.6)
+            heights.append(max(H * 0.6, (top - bot) * 0.6))
             vals.append(r["n_cells"])
         ax2.barh(centers, vals, height=heights, color=C_SIZE)
         vmax = max(vals) if vals else 1
@@ -204,14 +212,24 @@ def summary_plot(events, by_group, recs, out, chroms, title, width, dpi):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("-r", "--reference", required=True, help="SNP-array CNV BED (hg38)")
+    p.add_argument("-r", "--reference", default=None,
+                   help="reference: SNP-array CNV BED (hg38). Omit if using --ref-pred.")
+    p.add_argument("--ref-pred", default=None,
+                   help="use this inferCNV pred_cnv_regions.dat as the reference instead "
+                        "of -r (e.g. another sample's inferCNV output)")
+    p.add_argument("--ref-group", default=None,
+                   help="clone (cell_group_name) in --ref-pred to use as reference "
+                        "(default: union of all its clones)")
+    p.add_argument("--ref-label", default=None,
+                   help="label for the reference band (default: 'SNP array', or a "
+                        "generic 'inferCNV reference' with --ref-pred)")
     p.add_argument("-q", "--query", required=True,
                    help="inferCNV subclusters pred_cnv_regions.dat")
     p.add_argument("-g", "--groupings", default=None,
                    help="inferCNV observation_groupings.txt (for clone sizes)")
     p.add_argument("-o", "--out-prefix", required=True,
-                   help="output path prefix (writes <prefix>.clones_summary.png, "
-                        ".clones.tsv, and <prefix>.<clone>.overlay.png)")
+                   help="output prefix (writes <prefix>.clones_summary.png, "
+                        ".clones_profiles.png, .clones.tsv, .<clone>.overlay.png)")
     p.add_argument("--type-col", type=int, default=4,
                    help="1-based category column for event direction (default 4)")
     p.add_argument("--cn-col", type=int, default=13,
@@ -230,7 +248,14 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     chroms = genome_chroms(args.include_xy)
-    events = parse_reference(args.reference, args.type_col, args.cn_col)
+    if args.ref_pred:                       # reference = another sample's inferCNV clone(s)
+        events = events_from_infercnv(args.ref_pred, args.ref_group, args.hmm_i)
+        ref_label = args.ref_label or "inferCNV reference"
+    elif args.reference:                    # reference = SNP-array BED
+        events = parse_reference(args.reference, args.type_col, args.cn_col)
+        ref_label = args.ref_label or "SNP array"
+    else:
+        sys.exit("[clones] need a reference: -r <array BED> or --ref-pred <inferCNV pred>")
     if not events:
         sys.exit("[clones] no gain/loss events in the reference — nothing to compare.")
     neutral_state, hmm_i = neutral_state_for(args.query, args.hmm_i)
@@ -263,11 +288,15 @@ def main(argv=None):
             ttl = f"{args.title + ' · ' if args.title else ''}{clone}{size}"
             out = f"{args.out_prefix}.{safe(clone)}.overlay.png"
             render_overlay(out, events, by_group[clone], title=ttl, chroms=chroms,
-                           width=args.width, dpi=args.dpi)
+                           width=args.width, dpi=args.dpi, ref_label=ref_label)
             print(f"[clones]   overlay {i}/{len(recs)}: {out}")
 
     summary_plot(events, by_group, recs, args.out_prefix + ".clones_summary.png",
-                 chroms, args.title, args.width, args.dpi)
+                 chroms, args.title, args.width, args.dpi,
+                 ref_label=ref_label, show_match=True)
+    summary_plot(events, by_group, recs, args.out_prefix + ".clones_profiles.png",
+                 chroms, args.title, args.width, args.dpi,
+                 ref_label=ref_label, show_match=False)
     print(f"[clones] done: {len(recs)} clone(s).")
 
 

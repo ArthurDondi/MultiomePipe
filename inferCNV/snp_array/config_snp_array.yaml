@@ -40,11 +40,15 @@ snp_array:
 
   # ---- samples -> SNP-array CNV BED ----------------------------------------
   # One entry per sample. A value is either a plain hg19 BED path, OR a mapping that
-  # overrides type_col / cn_col for that one sample (rarely needed):
+  # overrides type_col / cn_col for that one sample (rarely needed) and/or adds an
+  # extra comparison against another sample's inferCNV via `ref_infercnv`:
   #     BMO-STANB8:
   #       bed: /path/STANB8.hg19.bed
   #       type_col: 4        # set if the gain/loss category is in a different column
   #       cn_col: 12         # set if the copy number is in a different column
+  #       ref_infercnv:      # ALSO compare this sample's clones vs another sample's inferCNV
+  #         sample: BMO-SKNBE2c
+  #         group: null      # a specific clone, or null = union of all its clones
   # Samples sharing a cell line point at the SAME BED (e.g. IMR DOX/noDOX). Delete
   # any line you have no array for. (BMOalone = organoid, no cancer line -> no array.)
   samples:
@@ -53,6 +57,9 @@ snp_array:
     BMO-STANB12:
       bed: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB12.hg19.bed
       cn_col: 12           # this file records copy number in col 12 (recorded value only)
+      ref_infercnv:        # ALSO compare STANB12's clones against SKNBE2c's inferCNV
+        sample: BMO-SKNBE2c   # use this sample's inferCNV pred as an extra reference
+        group: null           # a specific clone (cell_group_name), or null = union of all
     BMO-STANB8:    /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/STANB8.hg19.bed
     #BMO-IMR-DOX:   /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed
     #BMO-IMR-noDOX: /nobackup/lab_taschner-mandl/arthurdondi/data/cell_lines/snp_array/IMR.hg19.bed

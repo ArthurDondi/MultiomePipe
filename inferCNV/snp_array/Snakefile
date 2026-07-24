@@ -93,10 +93,22 @@ def array_input(wildcards):
     return sample_bed(wildcards.sample)
 
 
+def samples_with_ref_infercnv():
+    return [s for s in SAMPLES
+            if isinstance(ARRAYS[s], dict) and "ref_infercnv" in ARRAYS[s]]
+
+def ref_ic(s):
+    return ARRAYS[s]["ref_infercnv"]      # {sample:, group: (optional)}
+
+
 rule all:
     input:
         expand(f"{OUT}/{{sample}}/snp_vs_infercnv.summary.tsv", sample=SAMPLES),
         expand(f"{OUT}/{{sample}}/snp_vs_infercnv.clones_summary.png", sample=SAMPLES),
+        expand(f"{OUT}/{{sample}}/snp_vs_infercnv.clones_profiles.png", sample=SAMPLES),
+        # cross-sample: clones vs another sample's inferCNV as reference (opt-in)
+        [f"{OUT}/{s}/ref_infercnv/{s}.clones_summary.png"
+         for s in samples_with_ref_infercnv()],
     default_target: True
     localrule: True
 
@@ -163,6 +175,7 @@ rule Clones:
         groupings=groupings_input,
     output:
         summary=f"{OUT}/{{sample}}/snp_vs_infercnv.clones_summary.png",
+        profiles=f"{OUT}/{{sample}}/snp_vs_infercnv.clones_profiles.png",
         table=f"{OUT}/{{sample}}/snp_vs_infercnv.clones.tsv",
     params:
         script=os.path.join(SCRIPTS, "plot_clones.py"),
@@ -183,5 +196,43 @@ rule Clones:
         exec > {log} 2>&1
         python {params.script} -r {input.ref} -q {input.pred} -g {input.groupings} \
             -o {params.prefix} --type-col {params.type_col} --cn-col {params.cn_col} \
+            --min-overlap {params.min_ovl} {params.hmm} --title "{wildcards.sample}"
+        """
+
+
+# Opt-in cross-sample comparison: this sample's clones (query) vs ANOTHER sample's
+# inferCNV as the reference (no SNP array / liftover). Enabled per sample by a
+# `ref_infercnv: {sample:, group:}` mapping in the config; see samples_with_ref_infercnv.
+rule ClonesRefInferCNV:
+    input:
+        pred=pred_input,
+        groupings=groupings_input,
+        ref_pred=lambda w: _resolve(ref_ic(w.sample)["sample"], PRED_GLOB,
+                                    "reference pred_cnv_regions file", "pred_glob"),
+    output:
+        summary=f"{OUT}/{{sample}}/ref_infercnv/{{sample}}.clones_summary.png",
+        profiles=f"{OUT}/{{sample}}/ref_infercnv/{{sample}}.clones_profiles.png",
+        table=f"{OUT}/{{sample}}/ref_infercnv/{{sample}}.clones.tsv",
+    params:
+        script=os.path.join(SCRIPTS, "plot_clones.py"),
+        prefix=f"{OUT}/{{sample}}/ref_infercnv/{{sample}}",
+        ref_group=lambda w: ("--ref-group " + ref_ic(w.sample)["group"]
+                             if ref_ic(w.sample).get("group") else ""),
+        ref_label=lambda w: f"{ref_ic(w.sample)['sample']} inferCNV",
+        min_ovl=MIN_OVL,
+        hmm=HMM_FLAG,
+    conda:
+        "envs/snp_array.yaml"
+    resources:
+        mem_mb=4000,
+        runtime=30,
+    log:
+        f"{OUT}/logs/ClonesRefInferCNV/{{sample}}.log",
+    shell:
+        r"""
+        exec > {log} 2>&1
+        python {params.script} --ref-pred {input.ref_pred} {params.ref_group} \
+            --ref-label "{params.ref_label}" \
+            -q {input.pred} -g {input.groupings} -o {params.prefix} \
             --min-overlap {params.min_ovl} {params.hmm} --title "{wildcards.sample}"
         """

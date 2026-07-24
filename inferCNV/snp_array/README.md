@@ -169,9 +169,13 @@ query** and, in one call per sample, writes:
 
 - one **3-band overlay per clone** (`<prefix>.<clone>.overlay.png`, like step 3) —
   skip with `--no-overlays`;
-- a **clone summary** (`<prefix>.clones_summary.png`): every clone's *match* band
-  stacked on shared genome axes (a reference band on top for context), rows sorted
-  largest-clone-first, with a **clone-size sidebar**;
+- a **clone summary** (`<prefix>.clones_summary.png`): per clone, its inferCNV
+  copy-number profile (gain/loss) stacked above its *match* band, on shared genome
+  axes (a reference band on top), rows sorted largest-clone-first, with a
+  **clone-size sidebar**;
+- a **profiles-only** figure (`<prefix>.clones_profiles.png`): the reference band
+  plus each clone's inferCNV profile, gain/loss only, **no match band** — for
+  eyeballing the raw profiles side by side;
 - a **table** (`<prefix>.clones.tsv`): per-clone cell count + % events / % bp
   matched / % bp contradicted.
 
@@ -188,6 +192,14 @@ Clone sizes come from `observation_groupings.txt`: its "Dendrogram Group" column
 is the subcluster id (e.g. `neuron_s8`) and matches the suffix of a
 `cell_group_name` (`neuron.neuron_s8`). Without `-g` the plots/table still work but
 show no sizes (rows then sort by % bp matched). `--min-cells N` drops tiny clones.
+
+**Another sample's inferCNV as the reference.** Instead of a SNP array, use one
+sample's inferCNV profile as the reference for another's clones (e.g. compare
+STANB12's clones against SKNBE2c): pass `--ref-pred <that sample's
+pred_cnv_regions.dat>` (optionally `--ref-group <clone>`; default = union of its
+clones) in place of `-r`, plus `--ref-label "BMO-SKNBE2c inferCNV"`. In the
+pipeline this is opt-in per sample via a `ref_infercnv: {sample:, group:}` mapping
+(see the config), which writes an extra `<sample>/ref_infercnv/` set of outputs.
 
 ## Running all samples — Snakemake pipeline (SLURM)
 
@@ -223,8 +235,10 @@ The controller needs a conda env with `snakemake` + `snakemake-executor-plugin-s
 (`CONDA_ENV` in the runner, default `snakemake`); each rule's own tools come from
 `envs/snp_array.yaml`. Per sample the pipeline writes, under
 `<output_dir>/<sample>/`: `snp_vs_infercnv.summary.tsv` / `.per_event.tsv`,
-`.clones_summary.png` / `.clones.tsv`, and per-clone `.<clone>.overlay.png`. The
-inferCNV pred / groupings files are found by glob (see `pred_glob` /
+`.clones_summary.png`, `.clones_profiles.png`, `.clones.tsv`, and per-clone
+`.<clone>.overlay.png`; a sample with `ref_infercnv` also gets a
+`<sample>/ref_infercnv/` set comparing its clones against the other sample's
+inferCNV. The inferCNV pred / groupings files are found by glob (see `pred_glob` /
 `groupings_glob`), preferring the Bayes-filtered `Pnorm` predictions.
 
 To run one sample by hand instead, call the scripts directly as in sections 1-4

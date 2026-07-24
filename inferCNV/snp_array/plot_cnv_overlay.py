@@ -193,10 +193,11 @@ def import_pyplot():
 
 
 def render_overlay(out, events, query_by_dir, title="", chroms=None,
-                   width=18.0, height=4.2, dpi=150):
+                   width=18.0, height=4.2, dpi=150, ref_label="SNP array"):
     """Draw + save the 3-band overlay for one (reference, query) pair. `query_by_dir`
-    is a {dir:{chrom:[merged]}} (e.g. a single clone). Returns the decompose dict
-    (with 'skipped'). Shared by the CLI and plot_clones.py."""
+    is a {dir:{chrom:[merged]}} (e.g. a single clone). `ref_label` names the reference
+    (e.g. 'SNP array' or another sample's inferCNV). Returns the decompose dict (with
+    'skipped'). Shared by the CLI and plot_clones.py."""
     plt = import_pyplot()
 
     if chroms is None:
@@ -213,7 +214,7 @@ def render_overlay(out, events, query_by_dir, title="", chroms=None,
 
     decorate_genome_axis(ax, chroms, offsets, genome_len)
     ax.set_yticks([ROW_Y[r] + ROW_H / 2 for r in ("match", "query", "reference")])
-    ax.set_yticklabels(["match", "query\n(inferCNV)", "reference\n(SNP array)"], fontsize=9)
+    ax.set_yticklabels(["match", "query\n(inferCNV)", f"reference\n({ref_label})"], fontsize=9)
     ax.set_ylim(-0.25, ROW_Y["reference"] + ROW_H + 0.25)
     for spine in ("top", "right", "left"):
         ax.spines[spine].set_visible(False)
@@ -221,7 +222,7 @@ def render_overlay(out, events, query_by_dir, title="", chroms=None,
     ax.set_xlabel("chromosome", fontsize=9)
 
     t = title + "  " if title else ""
-    ax.set_title(f"{t}SNP array vs inferCNV  —  "
+    ax.set_title(f"{t}{ref_label} vs inferCNV  —  "
                  f"{dec['pm']:.0f}% of reference bp matched, {dec['pc']:.0f}% contradicted",
                  fontsize=11)
     ax.legend(handles=legend_handles(), ncol=5, fontsize=8, loc="lower center",

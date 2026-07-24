@@ -149,6 +149,27 @@ def parse_reference(path, type_col=4, cn_col=13):
     return events
 
 
+def events_from_infercnv(pred_path, group=None, hmm_i=None):
+    """Build reference-style events from an inferCNV pred_cnv_regions file, so one
+    sample's inferCNV profile can serve as the reference for another. `group` picks a
+    single clone (cell_group_name); None unions all its clones. Direction comes from
+    the HMM state (model read from the pred filename). Returns the same event dicts
+    as parse_reference (cn is None)."""
+    neutral_state, hmm_i = neutral_state_for(pred_path, hmm_i)
+    by_group = parse_query_by_group(pred_path, group, quiet=True, neutral_state=neutral_state)
+    by_dir = by_group[group] if group is not None else union_query(by_group)
+    events = []
+    for d in ("gain", "loss"):
+        for chrom, ivs in by_dir[d].items():
+            for s, e in ivs:
+                events.append({"chrom": chrom, "start": s, "end": e, "length": e - s,
+                               "cn": None, "dir": d, "label": f"infercnv_{d}"})
+    what = f"clone {group}" if group else f"union of {len(by_group)} clone(s)"
+    print(f"[overlap] reference = inferCNV {os.path.basename(pred_path)} "
+          f"({what}, HMMi{hmm_i}): {len(events)} event(s)")
+    return events
+
+
 def parse_query_by_group(path, group=None, quiet=False, neutral_state=3):
     """inferCNV pred_cnv_regions.dat -> {cell_group_name: {dir: {chrom: [merged]}}}.
 
