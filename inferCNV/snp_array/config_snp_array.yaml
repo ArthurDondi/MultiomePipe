@@ -29,7 +29,8 @@ snp_array:
   max_nudge: 200000        # rescue an unmappable boundary by nudging inward up to this many bp
 
   # ---- comparison parameters ----------------------------------------------
-  hmm_i: 3                 # inferCNV HMM model: 3 (subclusters i3) or 6; null = autodetect from filename
+  hmm_i: null              # inferCNV HMM model: null = autodetect from the pred filename
+                           # (HMMi3 / HMMi6); the filename always wins over a set value
   type_col: 4              # 1-based CATEGORY column giving event direction:
                            # gain / wc_gain / amplification -> gain, loss / wc_loss -> loss,
                            # anything else -> segment ignored (wc = whole chromosome)

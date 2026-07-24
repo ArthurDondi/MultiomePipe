@@ -79,20 +79,25 @@ def state_to_dir(state, neutral_state=3):
 
 
 def neutral_state_for(query_path, hmm_i=None):
-    """Return (neutral_state, hmm_i). If hmm_i is None, autodetect the HMM model
-    from the pred_cnv_regions filename ('...predHMMi3...' or '...HMMi6...'); default
-    to i6 (inferCNV's own default) if nothing matches. Neutral is the middle state:
+    """Return (neutral_state, hmm_i). The HMM model is taken from the
+    pred_cnv_regions filename ('...HMMi3...' or '...HMMi6...') whenever present there,
+    because the filename reflects how inferCNV was actually run; a conflicting --hmm-i
+    / config value is overridden (with a warning) so a stale setting can't silently
+    mislabel states (i6 has state 3 neutral -> 2 is loss, 4 is gain; i3 has state 2
+    neutral -> 1 is loss, 3 is gain). Only when the filename has no HMMiN marker is
+    the passed hmm_i used (else i6, inferCNV's default). Neutral is the middle state:
     i3 -> 2, i6 -> 3."""
-    if hmm_i is None:
-        base = os.path.basename(query_path)
-        if "HMMi3" in base:
-            hmm_i = 3
-        elif "HMMi6" in base:
-            hmm_i = 6
-        else:
-            hmm_i = 6
+    base = os.path.basename(query_path)
+    detected = 3 if "HMMi3" in base else (6 if "HMMi6" in base else None)
+    if detected is not None:
+        if hmm_i is not None and hmm_i != detected:
+            print(f"[overlap] WARNING: hmm_i={hmm_i} disagrees with the filename "
+                  f"(HMMi{detected}); using HMMi{detected} from the filename.")
+        hmm_i = detected
+    elif hmm_i is None:
+        hmm_i = 6
     if hmm_i not in (3, 6):
-        sys.exit(f"[overlap] --hmm-i must be 3 or 6, got {hmm_i}")
+        sys.exit(f"[overlap] hmm_i must be 3 or 6, got {hmm_i}")
     return {3: 2, 6: 3}[hmm_i], hmm_i
 
 
